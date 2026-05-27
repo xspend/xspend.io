@@ -390,13 +390,17 @@ async def upload_statement(
                 review_count += 1
         except Exception as dup_err:
             db.rollback()
-            skipped_count += 1
+            skipped += 1
             continue
 
     db.commit()
 
     # ── Auto-classify fixed vs variable ──
+    # Classifier reads all transactions for context (recurrence detection needs history),
+    # but we only WRITE results for newly-added transactions in this upload to avoid
+    # N+1 UPDATE queries across the whole DB on every upload.
     try:
+        saved_ids = {s.get("transaction_id") for s in saved if s.get("transaction_id")}
         all_txs_for_classification = [tx_to_dict(t) for t in db.query(Transaction).all()]
         merchant_rules_rows = db.execute(
             __import__("sqlalchemy").text("SELECT merchant_keyword, is_fixed FROM merchant_rules WHERE user_confirmed = 1")
@@ -404,7 +408,8 @@ async def upload_statement(
         merchant_rules = {row[0]: bool(row[1]) for row in merchant_rules_rows}
 
         classifications = classify_all_transactions(all_txs_for_classification, merchant_rules)
-        for c in classifications:
+        new_classifications = [c for c in classifications if c.get("transaction_id") in saved_ids]
+        for c in new_classifications:
             tx_id = c.get("transaction_id")
             if tx_id:
                 db.query(Transaction).filter(
@@ -415,7 +420,7 @@ async def upload_statement(
                     "fixed_source": c["source"],
                 })
         db.commit()
-        print(f"CLASSIFIED: {len(classifications)} transactions")
+        print(f"CLASSIFIED: {len(new_classifications)} new transactions (of {len(classifications)} considered)")
     except Exception as e:
         print(f"CLASSIFY ERROR: {e}")
 
