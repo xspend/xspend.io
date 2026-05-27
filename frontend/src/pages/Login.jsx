@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { API_URL } from '../lib/config'
 
 const F = "'DM Sans', Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
 
@@ -32,7 +33,7 @@ export default function Login() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('http://127.0.0.1:8000/auth/login', {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)

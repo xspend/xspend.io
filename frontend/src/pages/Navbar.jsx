@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
+import { API_URL } from '../lib/config'
 
 export default function Navbar() {
   const location = useLocation()
@@ -20,7 +21,7 @@ export default function Navbar() {
     setChatHistory(h => [...h, {role:'user', text:userMsg}])
     setChatLoading(true)
     try {
-      const res = await fetch('http://127.0.0.1:8000/chat', {
+      const res = await fetch(`${API_URL}/chat`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({message: userMsg})
       })

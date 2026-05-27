@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { API_URL } from '../lib/config'
 
 const fmt = n => '$' + Math.round(Math.abs(n) || 0).toLocaleString()
 const fmtD = n => '$' + Math.abs(n).toFixed(2)
@@ -138,7 +139,7 @@ function CreateProjectModal({ onClose, onCreated }) {
     if (!name.trim()) return
     setSaving(true)
     try {
-      await fetch('http://127.0.0.1:8000/projects', {
+      await fetch(`${API_URL}/projects`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, type: 'custom', target_amount: null, target_date: null })
       })
@@ -282,22 +283,22 @@ function MonthlyCommitments() {
   const [form, setForm] = useState({ name: '', amount: '', frequency: 'monthly' })
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/manual-fixed').then(r => r.json()).then(setItems).catch(() => {})
+    fetch(`${API_URL}/manual-fixed`).then(r => r.json()).then(setItems).catch(() => {})
   }, [])
 
   const add = async () => {
     if (!form.name || !form.amount) return
-    await fetch('http://127.0.0.1:8000/manual-fixed', {
+    await fetch(`${API_URL}/manual-fixed`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: form.name, amount: parseFloat(form.amount), frequency: form.frequency })
     })
     setForm({ name: '', amount: '', frequency: 'monthly' })
     setAdding(false)
-    fetch('http://127.0.0.1:8000/manual-fixed').then(r => r.json()).then(setItems)
+    fetch(`${API_URL}/manual-fixed`).then(r => r.json()).then(setItems)
   }
 
   const remove = async id => {
-    await fetch(`http://127.0.0.1:8000/manual-fixed/${id}`, { method: 'DELETE' })
+    await fetch(`${API_URL}/manual-fixed/${id}`, { method: 'DELETE' })
     setItems(p => p.filter(i => i.id !== id))
   }
 
@@ -444,9 +445,9 @@ export default function Goals() {
 
   const load = () => {
     Promise.all([
-      fetch('http://127.0.0.1:8000/projects').then(r => r.json()).catch(() => []),
-      fetch('http://127.0.0.1:8000/profile').then(r => r.json()).catch(() => ({})),
-      fetch('http://127.0.0.1:8000/transactions').then(r => r.json()).catch(() => []),
+      fetch(`${API_URL}/projects`).then(r => r.json()).catch(() => []),
+      fetch(`${API_URL}/profile`).then(r => r.json()).catch(() => ({})),
+      fetch(`${API_URL}/transactions`).then(r => r.json()).catch(() => []),
     ]).then(([p, prof, txs]) => {
       setProjects(Array.isArray(p) ? p : [])
       setProfile(prof || {})
@@ -483,13 +484,13 @@ export default function Goals() {
   }, [])
 
   const handleDelete = async id => {
-    await fetch(`http://127.0.0.1:8000/projects/${id}`, { method: 'DELETE' })
+    await fetch(`${API_URL}/projects/${id}`, { method: 'DELETE' })
     setProjects(p => p.filter(x => x.id !== id))
   }
 
   const saveProfile = async (field, value) => {
     setProfile(p => ({ ...p, [field]: value }))
-    await fetch('http://127.0.0.1:8000/profile', {
+    await fetch(`${API_URL}/profile`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [field]: value })
     }).catch(() => {})

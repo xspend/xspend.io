@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { API_URL } from '../lib/config'
 
 const DEFAULT_CATEGORIES = [
   'Food & Dining','Groceries','Transport','Rent & Utilities',
@@ -17,7 +18,7 @@ function ProjectDropdown({ tx, projects, onAssign }) {
 
   const assign = async (projectId) => {
     setOpen(false)
-    await fetch(`http://127.0.0.1:8000/transactions/${tx.id}/project`, {
+    await fetch(`${API_URL}/transactions/${tx.id}/project`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ project_id: projectId })
@@ -63,18 +64,34 @@ export default function Transactions() {
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
   const [editRow, setEditRow] = useState({})
-  const [filterCat, setFilterCat] = useState('all')
+  const [filterCat, setFilterCat] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('category') || 'all'
+  })
   const [filterAcct, setFilterAcct] = useState('all')
   const [filterMonth, setFilterMonth] = useState('all')
   const [filterProject, setFilterProject] = useState('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+
+  // Sync filterCat to URL (?category=...) so filter state is shareable
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (filterCat === 'all') {
+      params.delete('category')
+    } else {
+      params.set('category', filterCat)
+    }
+    const newSearch = params.toString()
+    const newUrl = newSearch ? `${window.location.pathname}?${newSearch}` : window.location.pathname
+    window.history.replaceState({}, '', newUrl)
+  }, [filterCat])
   const PER_PAGE = 25
 
   useEffect(() => {
     Promise.all([
-      fetch('http://127.0.0.1:8000/transactions').then(r => r.json()).catch(() => []),
-      fetch('http://127.0.0.1:8000/projects').then(r => r.json()).catch(() => []),
+      fetch(`${API_URL}/transactions`).then(r => r.json()).catch(() => []),
+      fetch(`${API_URL}/projects`).then(r => r.json()).catch(() => []),
     ]).then(([t, p]) => {
       setTxs(Array.isArray(t) ? t : [])
       setProjects(Array.isArray(p) ? p : [])
@@ -108,7 +125,7 @@ export default function Transactions() {
 
   const saveEdit = async id => {
     try {
-      await fetch(`http://127.0.0.1:8000/transactions/${id}`, {
+      await fetch(`${API_URL}/transactions/${id}`, {
         method: 'PATCH', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           transaction_date: editRow.transaction_date,
@@ -125,7 +142,7 @@ export default function Transactions() {
 
   const updateCategory = async (id, category) => {
     setTxs(p => p.map(t => t.id===id ? {...t, category} : t))
-    await fetch(`http://127.0.0.1:8000/transactions/${id}`, {
+    await fetch(`${API_URL}/transactions/${id}`, {
       method: 'PATCH', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({category})
     }).catch(() => {})
@@ -133,7 +150,7 @@ export default function Transactions() {
 
   const updateNotes = async (id, notes) => {
     setTxs(p => p.map(t => t.id===id ? {...t, notes} : t))
-    await fetch(`http://127.0.0.1:8000/transactions/${id}`, {
+    await fetch(`${API_URL}/transactions/${id}`, {
       method: 'PATCH', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({notes})
     }).catch(() => {})
@@ -256,7 +273,7 @@ export default function Transactions() {
                               {tx.transaction_type === 'loan_payment' && !tx.is_extra_payment && (
                                 <button onClick={async e => {
                                   e.stopPropagation()
-                                  await fetch(`http://127.0.0.1:8000/transactions/${tx.id}`, {
+                                  await fetch(`${API_URL}/transactions/${tx.id}`, {
                                     method:'PATCH', headers:{'Content-Type':'application/json'},
                                     body: JSON.stringify({notes: 'extra_payment'})
                                   })

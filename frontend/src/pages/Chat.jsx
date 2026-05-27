@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { API_URL } from '../lib/config'
 
 const suggestions = [
   'Where is most of my money going?',
@@ -26,7 +27,7 @@ export default function Chat() {
     setMessages(prev => [...prev, { role: 'user', text }])
     setLoading(true)
     try {
-      const res = await fetch('http://127.0.0.1:8000/chat', {
+      const res = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text })

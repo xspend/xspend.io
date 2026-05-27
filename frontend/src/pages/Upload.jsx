@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { API_URL } from '../lib/config'
 
 const FINANCE_FACTS = [
   { emoji:'💡', text:'People who track spending save 20% more on average than those who do not.' },
@@ -58,7 +59,7 @@ function FixedReviewCard({ onDismiss }) {
   const [overrides, setOverrides] = useState({}) // merchant → true/false
 
   useState(() => {
-    fetch('http://127.0.0.1:8000/fixed-summary')
+    fetch(`${API_URL}/fixed-summary`)
       .then(r => r.json())
       .then(data => { setFixedSummary(data); setLoading(false) })
       .catch(() => setLoading(false))
@@ -72,7 +73,7 @@ function FixedReviewCard({ onDismiss }) {
   const handleConfirm = async () => {
     const toUpdate = Object.entries(overrides)
     for (const [merchant, isFixed] of toUpdate) {
-      await fetch(`http://127.0.0.1:8000/transactions/${merchant}/fixed`, {
+      await fetch(`${API_URL}/transactions/${merchant}/fixed`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_fixed: isFixed })
@@ -183,7 +184,7 @@ function FixedReviewCard({ onDismiss }) {
                 <button onClick={async () => {
                     setOverrides(p => ({...p, [item.merchant]: false}))
                     // Store dismissal so we never ask again for this merchant
-                    await fetch('http://127.0.0.1:8000/merchant-rules/dismiss', {
+                    await fetch(`${API_URL}/merchant-rules/dismiss`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ merchant: item.merchant })
@@ -287,8 +288,8 @@ export default function Upload() {
     fd.append('file', entry.file)
     const bank = entry.bankName.trim()
     const url = bank
-      ? `http://127.0.0.1:8000/upload?bank_name=${encodeURIComponent(bank)}`
-      : 'http://127.0.0.1:8000/upload'
+      ? `${API_URL}/upload?bank_name=${encodeURIComponent(bank)}`
+      : `${API_URL}/upload`
     try {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 120000)  // 2 min timeout
@@ -313,7 +314,7 @@ export default function Upload() {
     if (!waiting.length) return
     // Check if this is the first upload ever
     try {
-      const r = await fetch('http://127.0.0.1:8000/transactions')
+      const r = await fetch(`${API_URL}/transactions`)
       const existing = await r.json()
       if (Array.isArray(existing) && existing.length === 0) setIsFirstUpload(true)
     } catch {}
@@ -326,7 +327,7 @@ export default function Upload() {
     }
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/transactions')
+      const res = await fetch(`${API_URL}/transactions`)
       const data = await res.json()
       const enriched = data.map(t => ({ ...t, excluded: isAutoExcluded(t) }))
       setAllTx(enriched)
@@ -354,7 +355,7 @@ export default function Upload() {
 
   const saveEdit = async (id) => {
     try {
-      await fetch(`http://127.0.0.1:8000/transactions/${id}`, {
+      await fetch(`${API_URL}/transactions/${id}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           transaction_date: editRow.transaction_date,
@@ -383,7 +384,7 @@ export default function Upload() {
     const results = []
     for (const line of valid) {
       try {
-        const res = await fetch('http://127.0.0.1:8000/transactions/manual', {
+        const res = await fetch(`${API_URL}/transactions/manual`, {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({ ...line, amount: parseFloat(line.amount), bank_source: manualBank||'Manual Entry' })
         })

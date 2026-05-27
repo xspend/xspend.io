@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie } from 'recharts'
+import { API_URL } from '../lib/config'
 
 const COLORS = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#64748b']
 const CAT_ICONS = {
@@ -160,7 +161,7 @@ function SpendingExplanation({ expTotal, cardPmts, transfers, credits, acctFilte
 function FixedSummaryCard() {
   const [data, setData] = useState(null)
   const [open, setOpen] = useState(false)
-  useEffect(() => { fetch('http://127.0.0.1:8000/fixed-summary').then(r=>r.json()).then(setData).catch(()=>{}) }, [])
+  useEffect(() => { fetch(`${API_URL}/fixed-summary`).then(r=>r.json()).then(setData).catch(()=>{}) }, [])
   if (!data?.fixed?.items?.length) return null
   const { fixed, subscriptions } = data
   const ICONS = { netflix:'🎬',spotify:'🎵',hulu:'📺',disney:'📺',apple:'🍎',google:'▶️',youtube:'▶️',gym:'💪',fitness:'💪',geico:'🛡️',insurance:'🛡️',rent:'🏠',hoa:'🏠',mortgage:'🏠',electric:'⚡',light:'⚡',comcast:'📡',xfinity:'📡',internet:'📡',paddle:'🎮',runna:'🏃',walmart:'🛒',wmt:'🛒' }
@@ -237,14 +238,15 @@ export default function Dashboard() {
   const [editingMonthlyBudget, setEditingMonthlyBudget] = useState(false)
   const [budgetInput, setBudgetInput] = useState('')
   const [summary, setSummary] = useState(null)
+  const [expandedCats, setExpandedCats] = useState(new Set())
   const name = localStorage.getItem('user_name') || 'Your'
 
   useEffect(() => {
     Promise.all([
-      fetch('http://127.0.0.1:8000/transactions').then(r=>r.json()).catch(()=>[]),
-      fetch('http://127.0.0.1:8000/profile').then(r=>r.json()).catch(()=>({})),
-      fetch('http://127.0.0.1:8000/budget-history').then(r=>r.json()).catch(()=>({})),
-      fetch('http://127.0.0.1:8000/manual-fixed').then(r=>r.json()).catch(()=>[]),
+      fetch(`${API_URL}/transactions`).then(r=>r.json()).catch(()=>[]),
+      fetch(`${API_URL}/profile`).then(r=>r.json()).catch(()=>({})),
+      fetch(`${API_URL}/budget-history`).then(r=>r.json()).catch(()=>({})),
+      fetch(`${API_URL}/manual-fixed`).then(r=>r.json()).catch(()=>[]),
     ]).then(([t,p,bh,mf]) => {
       setTxs(Array.isArray(t)?t:[])
       setProfile(p||{})
@@ -257,7 +259,7 @@ export default function Dashboard() {
 
   const saveProfile = async (field, value) => {
     setProfile(p=>({...p,[field]:value}))
-    await fetch('http://127.0.0.1:8000/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:value})}).catch(()=>{})
+    await fetch(`${API_URL}/profile`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:value})}).catch(()=>{})
   }
 
   const months = useMemo(()=>detectMonths(txs),[txs])
@@ -282,7 +284,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!activePeriodMonth) return
     setInsightsLoading(true)
-    fetch(`http://127.0.0.1:8000/insights?month=${activePeriodMonth}`)
+    fetch(`${API_URL}/insights?month=${activePeriodMonth}`)
       .then(r => r.json())
       .then(data => { setInsights(Array.isArray(data) ? data : []); setInsightsLoading(false) })
       .catch(() => setInsightsLoading(false))
@@ -360,8 +362,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     const url = activePeriodMonth
-      ? `http://127.0.0.1:8000/dashboard-summary?month=${activePeriodMonth}`
-      : `http://127.0.0.1:8000/dashboard-summary`
+      ? `${API_URL}/dashboard-summary?month=${activePeriodMonth}`
+      : `${API_URL}/dashboard-summary`
     fetch(url).then(r=>r.json()).then(setSummary).catch(()=>setSummary(null))
   }, [activePeriodMonth])
 
@@ -691,8 +693,8 @@ export default function Dashboard() {
                   const barPct = Math.max(2, Math.round((c.amount / topAmount) * 100))
                   const icon = CAT_ICONS[c.name] || '📦'
                   return (
+                    <React.Fragment key={c.name}>
                     <div
-                      key={c.name}
                       style={{
                         display:'grid',
                         gridTemplateColumns:'28px 1fr 90px 180px 50px 20px',
@@ -705,7 +707,14 @@ export default function Dashboard() {
                       }}
                       onMouseEnter={e => e.currentTarget.style.background = '#151720'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      onClick={() => { /* expansion lives in Chunk 3 */ }}
+                      onClick={() => {
+                        setExpandedCats(prev => {
+                          const next = new Set(prev)
+                          if (next.has(c.name)) next.delete(c.name)
+                          else next.add(c.name)
+                          return next
+                        })
+                      }}
                     >
                       <span style={{fontSize:18}}>{icon}</span>
                       <span style={{fontSize:14,color:'#f1f5f9',fontWeight:500}}>{c.name}</span>
@@ -716,8 +725,80 @@ export default function Dashboard() {
                         <div style={{height:'100%',width:`${barPct}%`,background:'linear-gradient(90deg,#3b82f6,#6366f1)',transition:'width 0.5s'}}/>
                       </div>
                       <span style={{fontSize:13,color:'#64748b',textAlign:'right'}}>{Math.round(c.pct_of_flexible)}%</span>
-                      <span style={{fontSize:14,color:'#475569',textAlign:'center'}}>›</span>
+                      <span style={{fontSize:14,color:'#475569',textAlign:'center',transform:expandedCats.has(c.name)?'rotate(90deg)':'rotate(0deg)',transition:'transform 0.2s'}}>›</span>
                     </div>
+
+                    {expandedCats.has(c.name) && (
+                      <div style={{
+                        padding:'12px 8px 18px 50px',
+                        animation:'xspendFadeIn 150ms ease-out',
+                      }}>
+                        {/* Context line */}
+                        <div style={{fontSize:12,color:'#64748b',marginBottom:6}}>
+                          {c.txn_count} transaction{c.txn_count===1?'':'s'} · avg {fmt(c.avg_amount)}
+                        </div>
+
+                        {/* Interpretive insight */}
+                        {c.insight?.text && (
+                          <div style={{fontSize:13,color:'#cbd5e1',marginBottom:16,fontStyle:'italic'}}>
+                            {c.insight.text}
+                          </div>
+                        )}
+
+                        {/* Top transactions */}
+                        {c.top_transactions && c.top_transactions.length > 0 && (
+                          <>
+                            <div style={{fontSize:10,fontWeight:700,color:'#475569',textTransform:'uppercase',letterSpacing:'1px',marginBottom:8}}>
+                              Top transactions
+                            </div>
+                            <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:14}}>
+                              {c.top_transactions.map((tx, ti) => (
+                                <div key={ti} style={{display:'grid',gridTemplateColumns:'70px 1fr 100px',gap:12,alignItems:'baseline',fontSize:13,padding:'4px 0'}}>
+                                  <span style={{color:'#64748b'}}>
+                                    {tx.date && new Date(tx.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+                                  </span>
+                                  <span style={{color:'#e2e8f0'}}>{tx.merchant}</span>
+                                  <span style={{color:'#10b981',fontFamily:'monospace',textAlign:'right',fontWeight:600}}>
+                                    {fmt(tx.amount)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+
+                        {/* View all link */}
+                        <a
+                          href={`/transactions?category=${encodeURIComponent(c.name)}`}
+                          style={{fontSize:12,color:'#3b82f6',textDecoration:'none',display:'inline-block',marginRight:18}}
+                          onMouseEnter={e => e.currentTarget.style.textDecoration='underline'}
+                          onMouseLeave={e => e.currentTarget.style.textDecoration='none'}
+                        >
+                          View all {c.name} transactions →
+                        </a>
+
+                        {/* Soft limit placeholder */}
+                        <button
+                          style={{
+                            background:'transparent',
+                            border:'1px dashed #334155',
+                            borderRadius:6,
+                            padding:'4px 10px',
+                            fontSize:12,
+                            color:'#64748b',
+                            cursor:'pointer',
+                            fontFamily:'inherit',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            alert('Soft limits coming in Phase 4. We\'ll let you set a gentle target without enforcement.')
+                          }}
+                        >
+                          + Set a soft limit
+                        </button>
+                      </div>
+                    )}
+                  </React.Fragment>
                   )
                 })}
 

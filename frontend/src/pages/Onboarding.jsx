@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { API_URL } from '../lib/config'
 
 const GOALS = [
   { value:'understand',    label:'Understand my finances',         icon:'📊' },
@@ -62,7 +63,7 @@ export default function Onboarding() {
   const handleFinish = async () => {
     setSaving(true)
     try {
-      await fetch('http://127.0.0.1:8000/profile', {
+      await fetch(`${API_URL}/profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
