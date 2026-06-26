@@ -268,6 +268,7 @@ async def upload_statement(
     current_user: str = Depends(get_current_user)
 ):
     contents = await file.read()
+    print(f"UPLOAD HANDLER FIRED: {file.filename} at {__import__("datetime").datetime.now()}")
     print(f"UPLOAD: {file.filename} size={len(contents)} bank={bank_name}")
 
     # Parse an account label from the filename so multiple accounts at the same
@@ -498,16 +499,11 @@ async def upload_statement(
             for c in new_classifications if c.get("transaction_id")
         ]
         if _bulk:
-            # Map transaction_id -> primary key id for bulk_update_mappings.
-            _idmap = {
-                r.transaction_id: r.id
-                for r in db.query(Transaction.id, Transaction.transaction_id)
-                          .filter(Transaction.transaction_id.in_([b["transaction_id"] for b in _bulk])).all()
-            }
+            # transaction_id IS the primary key, so map on it directly (no id lookup).
             _mappings = [
-                {"id": _idmap[b["transaction_id"]], "is_fixed": b["is_fixed"],
+                {"transaction_id": b["transaction_id"], "is_fixed": b["is_fixed"],
                  "fixed_confidence": b["fixed_confidence"], "fixed_source": b["fixed_source"]}
-                for b in _bulk if b["transaction_id"] in _idmap
+                for b in _bulk
             ]
             db.bulk_update_mappings(Transaction, _mappings)
         db.commit()
@@ -1559,12 +1555,19 @@ def get_insights(month: str = None, db: Session = Depends(get_db), current_user:
                transaction_date, is_fixed, bank_source
         FROM transactions
         WHERE transaction_type IN ('expense', 'income', 'transfer', 'credit_card_payment')
-        AND is_pending = 0
+        AND is_pending = false
         AND user_id = :u
         ORDER BY transaction_date
     """), {'u': current_user}).fetchall()
 
-    txs = [dict(r._mapping) for r in rows]
+    txs = []
+    for r in rows:
+        d = dict(r._mapping)
+        # Postgres returns DATE columns as date objects; insights.py does string
+        # ops ([:7], .split, .startswith) on transaction_date, so stringify it.
+        if d.get('transaction_date') is not None:
+            d['transaction_date'] = str(d['transaction_date'])
+        txs.append(d)
 
     profile_row = db.execute(_sa.text(
         "SELECT monthly_budget FROM users WHERE user_id = :u"

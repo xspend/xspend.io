@@ -43,7 +43,7 @@ def get_month_num(month_str):
 def group_by_month(transactions):
     monthly = defaultdict(list)
     for t in transactions:
-        m = (t.get('transaction_date') or '')[:7]
+        m = str(t.get('transaction_date') or '')[:7]
         if m:
             monthly[m].append(t)
     return dict(monthly)

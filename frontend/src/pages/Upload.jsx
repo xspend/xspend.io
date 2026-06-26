@@ -202,6 +202,7 @@ export default function Upload() {
   const [processingTime, setProcessingTime] = useState(0)
   const [factIndex, setFactIndex] = useState(0)
   const processingTimer = useRef(null)
+  const uploadingRef = useRef(false)  // re-entrancy guard: blocks duplicate uploadAll
 
   const [lines, setLines] = useState([{ ...emptyLine, id: Date.now() }])
   const [saving, setSaving] = useState(false)
@@ -278,32 +279,42 @@ export default function Upload() {
   }
 
   const uploadAll = async (queue) => {
+    console.log("UPLOADALL CALLED", new Date().toISOString())
     const currentQueue = queue || fileQueue
     const waiting = currentQueue.filter(f => f.status === FILE_STATES.waiting)
     if (!waiting.length) return
-    // Check if this is the first upload ever
+    // Hard guard: if an upload run is already in progress, ignore this call.
+    // Prevents the same files being processed twice (StrictMode double-invoke,
+    // duplicate event, etc.) which previously created 2 uploaded_files rows.
+    if (uploadingRef.current) return
+    uploadingRef.current = true
     try {
-      const r = await fetch(`${API_URL}/transactions`)
-      const existing = await r.json()
-      if (Array.isArray(existing) && existing.length === 0) setIsFirstUpload(true)
-    } catch {}
-    setProcessing(true)
-    setAllTx([])
-    setShowFixedReview(false)
+      // Check if this is the first upload ever
+      try {
+        const r = await fetch(`${API_URL}/transactions`)
+        const existing = await r.json()
+        if (Array.isArray(existing) && existing.length === 0) setIsFirstUpload(true)
+      } catch {}
+      setProcessing(true)
+      setAllTx([])
+      setShowFixedReview(false)
 
-    for (const entry of waiting) {
-      await uploadSingle(entry)
+      for (const entry of waiting) {
+        await uploadSingle(entry)
+      }
+
+      try {
+        const res = await fetch(`${API_URL}/transactions`)
+        const data = await res.json()
+        const enriched = data.map(t => ({ ...t, excluded: isAutoExcluded(t) }))
+        setAllTx(enriched)
+        setShowFixedReview(true) // Show review card after upload
+      } catch {}
+
+      setProcessing(false)
+    } finally {
+      uploadingRef.current = false
     }
-
-    try {
-      const res = await fetch(`${API_URL}/transactions`)
-      const data = await res.json()
-      const enriched = data.map(t => ({ ...t, excluded: isAutoExcluded(t) }))
-      setAllTx(enriched)
-      setShowFixedReview(true) // Show review card after upload
-    } catch {}
-
-    setProcessing(false)
   }
 
   const startEdit = (tx) => {
