@@ -12,6 +12,7 @@ class User(Base):
     user_id = Column(String, primary_key=True, default=gen_uuid)
     full_name = Column(String(150))
     email = Column(String(255), unique=True, nullable=True)
+    password_hash = Column(String(255), nullable=True)
     income_amount = Column(Float, default=0)
     income_frequency = Column(String(30), default="monthly")
     savings_goal_weekly = Column(Float, default=0)

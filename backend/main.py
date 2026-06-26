@@ -499,7 +499,7 @@ async def upload_statement(
         import sqlalchemy as _sa_null
         matching = db.execute(_sa_null.text('''
             SELECT id, amount FROM transactions
-            WHERE transaction_type = "expense"
+            WHERE transaction_type = 'expense'
             AND amount < 0
             AND LOWER(description) LIKE :key
             AND exclusion_reason IS NULL
@@ -544,7 +544,7 @@ def get_transactions(include_pending: bool = False, db: Session = Depends(get_db
     # Build credit map
     import sqlalchemy as _sa
     credits = db.execute(_sa.text(
-        'SELECT description, amount FROM transactions WHERE transaction_type = "card_credit"'
+        "SELECT description, amount FROM transactions WHERE transaction_type = 'card_credit'"
     )).fetchall()
     credit_map = {}
     for c in credits:
@@ -669,12 +669,12 @@ def update_transaction(tid: int, update: TransactionUpdate, db: Session = Depend
                 ), {'mv': norm_merchant, 'u': current_user}).fetchone()
                 if existing:
                     db.execute(_sa.text(
-                        "UPDATE merchant_rules SET category = :cat, match_type = 'contains', is_active = 1, updated_at = datetime('now') WHERE id = :id"
+                        "UPDATE merchant_rules SET category = :cat, match_type = 'contains', is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = :id"
                     ), {'cat': update.category, 'id': existing[0]})
                 else:
                     db.execute(_sa.text('''
                         INSERT INTO merchant_rules (merchant_keyword, match_value, match_type, match_field, category, transaction_type, priority, source, is_active, is_fixed, user_id, updated_at)
-                        VALUES (:mv, :mv, 'contains', 'merchant', :cat, 'expense', 10, 'user_correction', 1, 0, :u, datetime('now'))
+                        VALUES (:mv, :mv, 'contains', 'merchant', :cat, 'expense', 10, 'user_correction', 1, 0, :u, CURRENT_TIMESTAMP)
                     '''), {'mv': norm_merchant, 'cat': update.category, 'u': current_user})
                 db.commit()
         if t:
@@ -692,7 +692,7 @@ def update_transaction(tid: int, update: TransactionUpdate, db: Session = Depend
             result = classify_transaction(tx_dict, all_txs_list)
             db.execute(_sa.text(
                 "UPDATE transactions SET is_fixed=:f, fixed_confidence=:c, fixed_source=:s WHERE id=:id AND user_id=:u"
-            ), {'f': int(result['is_fixed']), 'c': result['confidence'], 's': 'user_override', 'id': tid, 'u': current_user})
+            ), {'f': bool(result['is_fixed']), 'c': result['confidence'], 's': 'user_override', 'id': tid, 'u': current_user})
             db.commit()
     tx = db.query(Transaction).filter(Transaction.id == tid).first()
     if not tx:
@@ -843,7 +843,7 @@ def get_credit_offsets_map(db):
     import sqlalchemy as _sa
     import re as _re
     credits = db.execute(_sa.text(
-        'SELECT description, amount FROM transactions WHERE transaction_type = "card_credit"'
+        "SELECT description, amount FROM transactions WHERE transaction_type = 'card_credit'"
     )).fetchall()
     credit_map = {}
     for c in credits:
@@ -1377,7 +1377,7 @@ def get_fixed_expenses_summary(months: Optional[str] = None, account: Optional[s
 
     # Get card credits to compute coverage
     credits = db.execute(_sa.text(
-        'SELECT description, amount FROM transactions WHERE transaction_type = "card_credit" AND user_id = :uid'
+        "SELECT description, amount FROM transactions WHERE transaction_type = 'card_credit' AND user_id = :uid"
     ), {"uid": current_user}).fetchall()
 
     # Build credit map: merchant_key -> credit_amount

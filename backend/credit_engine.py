@@ -157,7 +157,7 @@ def run_credit_matching(db, user_id=None):
     import sqlalchemy as _sa
 
     credits = db.execute(_sa.text(
-        'SELECT transaction_id, description, amount, transaction_date FROM transactions WHERE transaction_type = "card_credit"'
+        "SELECT transaction_id, description, amount, transaction_date FROM transactions WHERE transaction_type = 'card_credit'"
     )).fetchall()
 
     expenses_raw = db.execute(_sa.text(
@@ -247,7 +247,7 @@ def run_credit_matching(db, user_id=None):
 
     for rec in offset_records:
         db.execute(_sa.text(
-            'INSERT INTO credit_offsets (user_id, credit_transaction_id, matched_expense_id, matched_category, credit_type, eligible_for_matching, applied_amount, unapplied_amount, match_confidence, match_method, statement_period, is_active, matched_by) VALUES (:user_id, :credit_transaction_id, :matched_expense_id, :matched_category, :credit_type, :eligible_for_matching, :applied_amount, :unapplied_amount, :match_confidence, :match_method, :statement_period, 1, "system")'
+            "INSERT INTO credit_offsets (user_id, credit_transaction_id, matched_expense_id, matched_category, credit_type, eligible_for_matching, applied_amount, unapplied_amount, match_confidence, match_method, statement_period, is_active, matched_by) VALUES (:user_id, :credit_transaction_id, :matched_expense_id, :matched_category, :credit_type, :eligible_for_matching, :applied_amount, :unapplied_amount, :match_confidence, :match_method, :statement_period, 1, 'system')"
         ), rec)
 
     db.commit()
@@ -258,7 +258,7 @@ def get_net_category_spend(db, period: str) -> Dict:
     import sqlalchemy as _sa
 
     expenses = db.execute(_sa.text(
-        'SELECT category, amount, transaction_id, is_fixed FROM transactions WHERE transaction_type = "expense" AND amount < 0 AND exclusion_reason IS NULL AND strftime("%Y-%m", transaction_date) = :period'
+        "SELECT category, amount, transaction_id, is_fixed FROM transactions WHERE transaction_type = 'expense' AND amount < 0 AND exclusion_reason IS NULL AND substr(transaction_date, 1, 7) = :period"
     ), {'period': period}).fetchall()
 
     offsets = db.execute(_sa.text(
