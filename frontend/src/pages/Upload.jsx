@@ -222,12 +222,12 @@ export default function Upload() {
       result: null,
       error: null,
     }))
-    setFileQueue(p => {
-      const updated = [...p, ...entries]
-      // Auto-start upload after short delay
-      setTimeout(() => uploadAll(updated), 300)
-      return updated
-    })
+    // Pure state update — no side effects inside the updater (StrictMode invokes
+    // updaters twice, which previously scheduled the upload twice).
+    setFileQueue(p => [...p, ...entries])
+    // Schedule the upload ONCE, outside the updater. uploadAll reads the latest
+    // queue via its waiting-filter, so we pass the entries we just added.
+    setTimeout(() => uploadAll(entries), 300)
   }
 
   // Start processing timer when uploading begins
