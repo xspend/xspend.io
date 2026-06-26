@@ -323,9 +323,29 @@ async def upload_statement(
     # Get category map
     cat_map = {c.category_name: c.category_id for c in db.query(Category).all()}
 
+    import time as _time
+    _t0 = _time.time()
     saved, skipped, pending_skipped, review_count = [], 0, 0, 0
     skipped_merchants = []
     max_id = db.query(Transaction).count()
+
+    # ── PERF: load existing dedup data ONCE into memory (was ~3 queries per
+    # transaction = hundreds of network round-trips on remote Postgres). ──
+    from collections import defaultdict as _defaultdict
+    _existing = db.query(
+        Transaction.fingerprint, Transaction.external_transaction_id,
+        Transaction.account_name, Transaction.amount,
+        Transaction.transaction_date, Transaction.description,
+    ).filter(Transaction.user_id == current_user).all()
+    existing_fps = {r.fingerprint for r in _existing if r.fingerprint}
+    existing_fitids = {r.external_transaction_id for r in _existing if r.external_transaction_id}
+    # fuzzy index: (account_name, rounded amount) -> list of (date, lower desc)
+    fuzzy_index = _defaultdict(list)
+    for r in _existing:
+        if r.transaction_date is not None and r.amount is not None:
+            fuzzy_index[(r.account_name, round(float(r.amount), 2))].append(
+                (r.transaction_date, (r.description or "").lower().strip())
+            )
 
     for t in transactions:
         if t.get("is_pending"):
@@ -335,11 +355,7 @@ async def upload_statement(
         # FITID deduplication for OFX files — check external_transaction_id first
         fitid = t.get("external_transaction_id", "").strip()
         if fitid and len(fitid) > 5:
-            fitid_existing = db.query(Transaction).filter(
-                Transaction.external_transaction_id == fitid,
-                Transaction.user_id == current_user
-            ).first()
-            if fitid_existing:
+            if fitid in existing_fitids:
                 skipped += 1
                 skipped_merchants.append(t.get('description','')[:20])
                 continue
@@ -359,8 +375,7 @@ async def upload_statement(
         )
         fp = t.get("fingerprint")
         if fp:
-            existing = db.query(Transaction).filter(Transaction.fingerprint == fp, Transaction.user_id == current_user).first()
-            if existing:
+            if fp in existing_fps:
                 skipped += 1
                 skipped_merchants.append(t.get('description','')[:20])
                 continue
@@ -378,16 +393,10 @@ async def upload_statement(
             if tx_date_obj:
                 amount = t["amount"]
                 desc_key = t["description"].lower().strip()
-                fuzzy_existing = db.query(Transaction).filter(
-                    Transaction.user_id == current_user,
-                    Transaction.transaction_date >= date_min,
-                    Transaction.transaction_date <= date_max,
-                    Transaction.amount == amount,
-                    Transaction.account_name == t.get("account_name"),
-                ).all()
+                _candidates = fuzzy_index.get((t.get("account_name"), round(float(amount), 2)), [])
                 fuzzy_match = any(
-                    (tx.description or '').lower().strip() == desc_key
-                    for tx in fuzzy_existing
+                    (date_min <= cand_date <= date_max) and cand_desc == desc_key
+                    for cand_date, cand_desc in _candidates
                 )
                 if fuzzy_match:
                     skipped += 1
@@ -444,6 +453,14 @@ async def upload_statement(
             db.add(tx)
             db.flush()  # flush individually to catch duplicates
             saved.append(tx_to_dict(tx))
+            # Keep in-memory dedup structures current so duplicates WITHIN this
+            # same upload are still caught (the preloaded sets only had pre-upload data).
+            if fp:
+                existing_fps.add(fp)
+            if date is not None and t.get("amount") is not None:
+                fuzzy_index[(t.get("account_name"), round(float(t["amount"]), 2))].append(
+                    (date, (t.get("description") or "").lower().strip())
+                )
             if t.get("needs_review"):
                 review_count += 1
         except Exception as dup_err:
@@ -452,6 +469,8 @@ async def upload_statement(
             continue
 
     db.commit()
+    print(f"TIMING: dedup+insert took {_time.time()-_t0:.2f}s for {len(saved)} saved")
+    _t1 = _time.time()
 
     # ── Auto-classify fixed vs variable ──
     # Classifier reads all transactions for context (recurrence detection needs history),
@@ -468,18 +487,32 @@ async def upload_statement(
 
         classifications = classify_all_transactions(all_txs_for_classification, merchant_rules)
         new_classifications = [c for c in classifications if c.get("transaction_id") in saved_ids]
-        for c in new_classifications:
-            tx_id = c.get("transaction_id")
-            if tx_id:
-                db.query(Transaction).filter(
-                    Transaction.transaction_id == tx_id
-                ).update({
-                    "is_fixed": c["is_fixed"],
-                    "fixed_confidence": c["confidence"],
-                    "fixed_source": c["source"],
-                })
+        # Bulk update in ONE round-trip instead of N per-row UPDATEs.
+        _bulk = [
+            {
+                "transaction_id": c["transaction_id"],
+                "is_fixed": bool(c["is_fixed"]),
+                "fixed_confidence": c["confidence"],
+                "fixed_source": c["source"],
+            }
+            for c in new_classifications if c.get("transaction_id")
+        ]
+        if _bulk:
+            # Map transaction_id -> primary key id for bulk_update_mappings.
+            _idmap = {
+                r.transaction_id: r.id
+                for r in db.query(Transaction.id, Transaction.transaction_id)
+                          .filter(Transaction.transaction_id.in_([b["transaction_id"] for b in _bulk])).all()
+            }
+            _mappings = [
+                {"id": _idmap[b["transaction_id"]], "is_fixed": b["is_fixed"],
+                 "fixed_confidence": b["fixed_confidence"], "fixed_source": b["fixed_source"]}
+                for b in _bulk if b["transaction_id"] in _idmap
+            ]
+            db.bulk_update_mappings(Transaction, _mappings)
         db.commit()
         print(f"CLASSIFIED: {len(new_classifications)} new transactions (of {len(classifications)} considered)")
+        print(f"TIMING: classify took {_time.time()-_t1:.2f}s")
     except Exception as e:
         print(f"CLASSIFY ERROR: {e}")
 
@@ -511,8 +544,8 @@ async def upload_statement(
             if net <= 0:
                 db.execute(_sa_null.text('''
                     UPDATE transactions SET
-                    transaction_type = "excluded",
-                    exclusion_reason = "credit_covered"
+                    transaction_type = 'excluded',
+                    exclusion_reason = 'credit_covered'
                     WHERE id = :id AND user_id = :u
                 '''), {'id': matching[0], 'u': current_user})
     db.commit()
@@ -544,8 +577,8 @@ def get_transactions(include_pending: bool = False, db: Session = Depends(get_db
     # Build credit map
     import sqlalchemy as _sa
     credits = db.execute(_sa.text(
-        "SELECT description, amount FROM transactions WHERE transaction_type = 'card_credit'"
-    )).fetchall()
+        "SELECT description, amount FROM transactions WHERE transaction_type = 'card_credit' AND user_id = :uid"
+    ), {"uid": current_user}).fetchall()
     credit_map = {}
     for c in credits:
         match = _re.search(r'-\s*(.+)', c[0] or '')
@@ -839,12 +872,13 @@ def get_budget_history(db: Session = Depends(get_db), current_user: str = Depend
     return {row[0]: row[1] for row in rows}
 
 # ── Credit Offset Calculation ──
-def get_credit_offsets_map(db):
+def get_credit_offsets_map(db, current_user):
+    # NOTE: deferred/unused. Must be passed current_user before any live wiring.
     import sqlalchemy as _sa
     import re as _re
     credits = db.execute(_sa.text(
-        "SELECT description, amount FROM transactions WHERE transaction_type = 'card_credit'"
-    )).fetchall()
+        "SELECT description, amount FROM transactions WHERE transaction_type = 'card_credit' AND user_id = :uid"
+    ), {"uid": current_user}).fetchall()
     credit_map = {}
     for c in credits:
         desc = c[0] or ''
