@@ -4,7 +4,14 @@ from jose import JWTError, jwt
 import bcrypt
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-SECRET_KEY = "financeai-secret-key-change-in-production-2026"
+import os as _os
+# Read the JWT secret from env. In production it MUST be set — fail loud so we
+# never silently fall back to a public default. Local dev keeps a fallback.
+SECRET_KEY = _os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    if _os.getenv("ENVIRONMENT", "development").lower() == "production":
+        raise RuntimeError("JWT_SECRET_KEY must be set in production")
+    SECRET_KEY = "financeai-dev-only-secret-change-me"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
 

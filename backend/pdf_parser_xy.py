@@ -314,12 +314,22 @@ def parse_chase_xy(pdf_path: str = None, pdf_bytes: bytes = None) -> List[Dict]:
                         tx_type = 'credit_card_payment'
                         final_amount = amount
                     else:
-                        # RAZ*IndiGo, Amazon refunds etc — actual expenses/refunds
-                        tx_type = 'expense' if amount < 0 else 'refund'
-                        final_amount = amount
+                        # In the payments/credits area: negative = refund/credit (money back),
+                        # positive = a charge that landed here.
+                        if amount < 0:
+                            tx_type = 'refund'
+                            final_amount = abs(amount)   # net out
+                        else:
+                            tx_type = 'expense'
+                            final_amount = -abs(amount)
                 else:
-                    tx_type = 'expense'
-                    final_amount = -abs(amount)  # Chase exports purchases as positive
+                    # Chase purchases section: positive = purchase, negative = refund.
+                    if amount < 0:
+                        tx_type = 'refund'
+                        final_amount = abs(amount)   # refund: store positive so it nets out
+                    else:
+                        tx_type = 'expense'
+                        final_amount = -abs(amount)  # purchase: store negative
                 
                 transactions.append({
                     'transaction_date': full_date,

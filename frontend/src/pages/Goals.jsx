@@ -67,7 +67,7 @@ function ProjectCard({ project, onDelete, allTransactions }) {
   }
 
   return (
-    <div style={{ background:'#0f1117', border:'1px solid #1e2030', borderRadius:18, overflow:'hidden', transition:'transform 0.15s' }}
+    <div style={{ background:'#ffffff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, overflow:'hidden', transition:'transform 0.15s' }}
       onMouseEnter={e => e.currentTarget.style.transform='translateY(-2px)'}
       onMouseLeave={e => e.currentTarget.style.transform='none'}>
 
@@ -75,20 +75,20 @@ function ProjectCard({ project, onDelete, allTransactions }) {
       <div style={{ padding:'20px 22px 16px' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-            <div style={{ width:42, height:42, borderRadius:12, background:'rgba(99,102,241,0.1)', border:'1px solid rgba(99,102,241,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>
+            <div style={{ width:42, height:42, borderRadius:12, background:'rgba(232,93,60,0.1)', border:'1px solid rgba(232,93,60,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22 }}>
               {getEmoji(project.name)}
             </div>
             <div>
-              <p style={{ color:'#f1f5f9', fontSize:15, fontWeight:700, marginBottom:2 }}>{project.name}</p>
-              <p style={{ color:'#334155', fontSize:11 }}>{count} transaction{count !== 1 ? 's' : ''} tagged</p>
+              <p style={{ color:'#1a1a1a', fontSize:17, fontWeight:700, marginBottom:2 }}>{project.name}</p>
+              <p style={{ color:'#8a8a85', fontSize:13 }}>{count} transaction{count !== 1 ? 's' : ''} tagged</p>
             </div>
           </div>
           <button onClick={() => onDelete(project.id)}
-            style={{ background:'none', border:'none', color:'#283244', cursor:'pointer', fontSize:16, padding:'4px' }}>✕</button>
+            style={{ background:'none', border:'none', color:'#b0b0a8', cursor:'pointer', fontSize:18, padding:'4px' }}>✕</button>
         </div>
 
         {/* Total */}
-        <p style={{ fontSize:32, fontWeight:800, color: count > 0 ? '#f1f5f9' : '#283244', fontFamily:'monospace', letterSpacing:'-1px', marginBottom:12 }}>
+        <p style={{ fontSize:34, fontWeight:800, color: count > 0 ? '#1a1a1a' : '#b0b0a8', fontFamily:'monospace', letterSpacing:'-1px', marginBottom:12 }}>
           {fmt(total)}
         </p>
 
@@ -97,14 +97,14 @@ function ProjectCard({ project, onDelete, allTransactions }) {
           <div>
             <div style={{ display:'flex', height:6, borderRadius:99, overflow:'hidden', gap:1, marginBottom:10 }}>
               {topCats.map((c, i) => (
-                <div key={i} style={{ width: c.pct + '%', background: CATEGORY_COLORS[c.name] || '#64748b', borderRadius:99, transition:'width 0.5s' }}/>
+                <div key={i} style={{ width: c.pct + '%', background: CATEGORY_COLORS[c.name] || '#8a8a85', borderRadius:99, transition:'width 0.5s' }}/>
               ))}
             </div>
             <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
               {topCats.map((c, i) => (
                 <div key={i} style={{ display:'flex', alignItems:'center', gap:4 }}>
-                  <div style={{ width:7, height:7, borderRadius:2, background: CATEGORY_COLORS[c.name] || '#64748b', flexShrink:0 }}/>
-                  <span style={{ fontSize:11, color:'#475569' }}>{c.name} {c.pct}%</span>
+                  <div style={{ width:7, height:7, borderRadius:2, background: CATEGORY_COLORS[c.name] || '#8a8a85', flexShrink:0 }}/>
+                  <span style={{ fontSize:13, color:'#5a5a5a' }}>{c.name} {c.pct}%</span>
                 </div>
               ))}
             </div>
@@ -112,8 +112,8 @@ function ProjectCard({ project, onDelete, allTransactions }) {
         )}
 
         {count === 0 && (
-          <p style={{ fontSize:12, color:'#283244', marginTop:4 }}>
-            Tag transactions from the <Link to="/app/transactions" style={{ color:'#3b82f6', textDecoration:'none' }}>Transactions</Link> page
+          <p style={{ fontSize:14, color:'#b0b0a8', marginTop:4 }}>
+            Tag transactions from the <Link to="/app/transactions" style={{ color:'#e85d3c', textDecoration:'none' }}>Transactions</Link> page
           </p>
         )}
       </div>
@@ -149,46 +149,46 @@ function CreateProjectModal({ onClose, onCreated }) {
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, backdropFilter:'blur(4px)' }} onClick={onClose}>
-      <div style={{ background:'#0f1117', border:'1px solid #1e2030', borderRadius:20, padding:32, width:440, fontFamily:F }} onClick={e => e.stopPropagation()}>
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, backdropFilter:'blur(4px)' }} onClick={onClose}>
+      <div style={{ background:'#ffffff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:20, padding:32, width:440, fontFamily:F }} onClick={e => e.stopPropagation()}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
           <div>
-            <h2 style={{ color:'#f1f5f9', fontSize:18, fontWeight:700, margin:0, marginBottom:4 }}>New project</h2>
-            <p style={{ color:'#475569', fontSize:12, margin:0 }}>Track spending for anything that matters to you</p>
+            <h2 style={{ color:'#1a1a1a', fontSize:20, fontWeight:700, margin:0, marginBottom:4 }}>New project</h2>
+            <p style={{ color:'#5a5a5a', fontSize:14, margin:0 }}>Track spending for anything that matters to you</p>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#475569', fontSize:18, cursor:'pointer' }}>✕</button>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#5a5a5a', fontSize:20, cursor:'pointer' }}>✕</button>
         </div>
 
         <div style={{ marginBottom:16 }}>
-          <div style={{ fontSize:11, color:'#475569', fontWeight:600, letterSpacing:'1px', textTransform:'uppercase', marginBottom:8 }}>Name</div>
-          <input style={{ background:'#0a0d12', border:'1px solid #1e2030', borderRadius:10, padding:'11px 14px', color:'#fff', fontSize:14, outline:'none', width:'100%', fontFamily:F, boxSizing:'border-box' }}
+          <div style={{ fontSize:13, color:'#5a5a5a', fontWeight:600, letterSpacing:'1px', textTransform:'uppercase', marginBottom:8 }}>Name</div>
+          <input style={{ background:'#faf9f5', border:'1px solid rgba(0,0,0,0.08)', borderRadius:10, padding:'11px 14px', color:'#1a1a1a', fontSize:16, outline:'none', width:'100%', fontFamily:F, boxSizing:'border-box' }}
             placeholder="e.g. Japan Trip" autoFocus value={name}
             onChange={e => setName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && name && submit()}/>
         </div>
 
         <div style={{ marginBottom:28 }}>
-          <div style={{ fontSize:11, color:'#334155', marginBottom:10 }}>Quick start</div>
+          <div style={{ fontSize:13, color:'#8a8a85', marginBottom:10 }}>Quick start</div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
             {EXAMPLES.map(ex => (
               <button key={ex.name} onClick={() => setName(ex.name)}
-                style={{ background: name === ex.name ? 'rgba(99,102,241,0.15)' : '#0a0d12', border: `1px solid ${name === ex.name ? '#6366f1' : '#1e2030'}`, borderRadius:10, padding:'8px 14px', fontSize:13, color: name === ex.name ? '#818cf8' : '#64748b', cursor:'pointer', fontFamily:F }}>
+                style={{ background: name === ex.name ? 'rgba(232,93,60,0.15)' : '#faf9f5', border: `1px solid ${name === ex.name ? '#e85d3c' : 'rgba(0,0,0,0.08)'}`, borderRadius:10, padding:'8px 14px', fontSize:15, color: name === ex.name ? '#e85d3c' : '#8a8a85', cursor:'pointer', fontFamily:F }}>
                 {ex.label}
               </button>
             ))}
           </div>
         </div>
 
-        <div style={{ background:'rgba(99,102,241,0.06)', border:'1px solid rgba(99,102,241,0.15)', borderRadius:10, padding:'12px 16px', marginBottom:24 }}>
-          <p style={{ color:'#64748b', fontSize:12, lineHeight:1.6, margin:0 }}>
+        <div style={{ background:'rgba(232,93,60,0.06)', border:'1px solid rgba(232,93,60,0.15)', borderRadius:10, padding:'12px 16px', marginBottom:24 }}>
+          <p style={{ color:'#8a8a85', fontSize:14, lineHeight:1.6, margin:0 }}>
             Categories show <em>what</em> you spent. Projects show <em>why</em> — like adding songs to a playlist.
           </p>
         </div>
 
         <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-          <button onClick={onClose} style={{ background:'none', border:'1px solid #1e2030', borderRadius:10, padding:'11px 16px', fontSize:13, color:'#475569', cursor:'pointer', fontFamily:F }}>Cancel</button>
+          <button onClick={onClose} style={{ background:'none', border:'1px solid rgba(0,0,0,0.08)', borderRadius:10, padding:'11px 16px', fontSize:15, color:'#5a5a5a', cursor:'pointer', fontFamily:F }}>Cancel</button>
           <button onClick={submit} disabled={!name.trim() || saving}
-            style={{ background:'#6366f1', color:'#fff', border:'none', borderRadius:10, padding:'11px 20px', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:F, opacity: !name.trim() || saving ? 0.5 : 1 }}>
+            style={{ background:'#e85d3c', color:'#fff', border:'none', borderRadius:10, padding:'11px 20px', fontSize:15, fontWeight:700, cursor:'pointer', fontFamily:F, opacity: !name.trim() || saving ? 0.5 : 1 }}>
             {saving ? 'Creating…' : 'Create project'}
           </button>
         </div>
@@ -238,7 +238,7 @@ function SpendingImpact({ profile, expenses, topCategories }) {
     const combined = top1.val + top2.val
     insights.push({
       icon: '🎯',
-      text: `${top1.name} + ${top2.name} make up most of your flexible spending — ${fmt(combined)}/mo`
+      text: `${top1.name} + ${top2.name} make up most of your discretionary spending — ${fmt(combined)}/mo`
     })
   }
 
@@ -246,26 +246,26 @@ function SpendingImpact({ profile, expenses, topCategories }) {
   if (shown.length === 0) return null
 
   return (
-    <div style={{ background:'#0f1117', border:'1px solid #1e2030', borderRadius:18, overflow:'hidden', marginBottom:20 }}>
+    <div style={{ background:'#ffffff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, overflow:'hidden', marginBottom:20 }}>
       <button onClick={() => setOpen(o => !o)}
         style={{ width:'100%', background:'none', border:'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 22px', fontFamily:F }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <span style={{ fontSize:16 }}>💡</span>
+          <span style={{ fontSize:18 }}>💡</span>
           <div style={{ textAlign:'left' }}>
-            <p style={{ color:'#f1f5f9', fontSize:13, fontWeight:600, marginBottom:1 }}>Spending impact</p>
-            <p style={{ color:'#475569', fontSize:11 }}>How your spending habits affect your savings</p>
+            <p style={{ color:'#1a1a1a', fontSize:15, fontWeight:600, marginBottom:1 }}>Spending impact</p>
+            <p style={{ color:'#5a5a5a', fontSize:13 }}>How your spending habits affect your savings</p>
           </div>
         </div>
-        <span style={{ color:'#334155', fontSize:11, transform: open ? 'rotate(180deg)' : 'none', transition:'transform 0.2s', display:'inline-block' }}>▼</span>
+        <span style={{ color:'#8a8a85', fontSize:13, transform: open ? 'rotate(180deg)' : 'none', transition:'transform 0.2s', display:'inline-block' }}>▼</span>
       </button>
 
       {open && (
-        <div style={{ padding:'0 22px 20px', borderTop:'1px solid #1e2030' }}>
+        <div style={{ padding:'0 22px 20px', borderTop:'1px solid rgba(0,0,0,0.08)' }}>
           <div style={{ display:'flex', flexDirection:'column', gap:10, paddingTop:16 }}>
             {shown.map((ins, i) => (
-              <div key={i} style={{ display:'flex', gap:10, padding:'12px 14px', background:'#080b0f', borderRadius:10 }}>
-                <span style={{ fontSize:16, flexShrink:0 }}>{ins.icon}</span>
-                <p style={{ color:'#94a3b8', fontSize:13, lineHeight:1.5 }}>{ins.text}</p>
+              <div key={i} style={{ display:'flex', gap:10, padding:'12px 14px', background:'#faf9f5', borderRadius:10 }}>
+                <span style={{ fontSize:18, flexShrink:0 }}>{ins.icon}</span>
+                <p style={{ color:'#8a8a85', fontSize:15, lineHeight:1.5 }}>{ins.text}</p>
               </div>
             ))}
           </div>
@@ -305,67 +305,67 @@ function MonthlyCommitments() {
   const total = items.reduce((s, i) => s + i.amount, 0)
 
   return (
-    <div style={{ background:'#0f1117', border:'1px solid #1e2030', borderRadius:18, overflow:'hidden', marginBottom:20 }}>
+    <div style={{ background:'#ffffff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, overflow:'hidden', marginBottom:20 }}>
       <button onClick={() => setOpen(o => !o)}
         style={{ width:'100%', background:'none', border:'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 22px', fontFamily:F }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <span style={{ fontSize:16 }}>🏠</span>
+          <span style={{ fontSize:18 }}>🏠</span>
           <div style={{ textAlign:'left' }}>
-            <p style={{ color:'#f1f5f9', fontSize:13, fontWeight:600, marginBottom:1 }}>
+            <p style={{ color:'#1a1a1a', fontSize:15, fontWeight:600, marginBottom:1 }}>
               Monthly commitments
-              {total > 0 && <span style={{ color:'#475569', fontWeight:400, marginLeft:8, fontSize:12 }}>{fmt(total)}/mo</span>}
+              {total > 0 && <span style={{ color:'#5a5a5a', fontWeight:400, marginLeft:8, fontSize:14 }}>{fmt(total)}/mo</span>}
             </p>
-            <p style={{ color:'#475569', fontSize:11 }}>Rent, mortgage, car payments from accounts not uploaded</p>
+            <p style={{ color:'#5a5a5a', fontSize:13 }}>Rent, mortgage, car payments from accounts not uploaded</p>
           </div>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <button onClick={e => { e.stopPropagation(); setAdding(a => !a); setOpen(true) }}
-            style={{ background:'none', border:'1px solid #1e2030', borderRadius:7, padding:'4px 10px', fontSize:11, color:'#64748b', cursor:'pointer', fontFamily:F }}>
+            style={{ background:'none', border:'1px solid rgba(0,0,0,0.08)', borderRadius:7, padding:'4px 10px', fontSize:13, color:'#8a8a85', cursor:'pointer', fontFamily:F }}>
             + Add
           </button>
-          <span style={{ color:'#334155', fontSize:11, transform: open ? 'rotate(180deg)' : 'none', transition:'transform 0.2s', display:'inline-block' }}>▼</span>
+          <span style={{ color:'#8a8a85', fontSize:13, transform: open ? 'rotate(180deg)' : 'none', transition:'transform 0.2s', display:'inline-block' }}>▼</span>
         </div>
       </button>
 
       {open && (
-        <div style={{ borderTop:'1px solid #1e2030' }}>
+        <div style={{ borderTop:'1px solid rgba(0,0,0,0.08)' }}>
           {items.map(item => (
-            <div key={item.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 22px', borderBottom:'1px solid #0a0d12' }}>
-              <span style={{ color:'#94a3b8', fontSize:13 }}>{item.name}</span>
+            <div key={item.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 22px', borderBottom:'1px solid #faf9f5' }}>
+              <span style={{ color:'#8a8a85', fontSize:15 }}>{item.name}</span>
               <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                <span style={{ color:'#64748b', fontSize:13, fontFamily:'monospace' }}>
+                <span style={{ color:'#8a8a85', fontSize:15, fontFamily:'monospace' }}>
                   {fmt(item.amount)}{item.frequency === 'monthly' ? '/mo' : item.frequency === 'bimonthly' ? ' every 2mo' : item.frequency === 'quarterly' ? '/qtr' : '/yr'}
                 </span>
-                <button onClick={() => remove(item.id)} style={{ background:'none', border:'none', color:'#334155', cursor:'pointer', fontSize:13 }}>✕</button>
+                <button onClick={() => remove(item.id)} style={{ background:'none', border:'none', color:'#8a8a85', cursor:'pointer', fontSize:15 }}>✕</button>
               </div>
             </div>
           ))}
 
           {adding && (
-            <div style={{ padding:'12px 22px', display:'flex', gap:8, alignItems:'center', background:'#0a0d12' }}>
+            <div style={{ padding:'12px 22px', display:'flex', gap:8, alignItems:'center', background:'#faf9f5' }}>
               <input placeholder="e.g. Rent" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} autoFocus
-                style={{ flex:1, background:'#0f1117', border:'1px solid #1e2030', borderRadius:8, padding:'8px 12px', color:'#fff', fontSize:13, outline:'none', fontFamily:F }}/>
+                style={{ flex:1, background:'#ffffff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:8, padding:'8px 12px', color:'#1a1a1a', fontSize:15, outline:'none', fontFamily:F }}/>
               <div style={{ position:'relative' }}>
-                <span style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'#475569' }}>$</span>
+                <span style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'#5a5a5a' }}>$</span>
                 <input type="number" placeholder="1500" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })}
                   onKeyDown={e => e.key === 'Enter' && add()}
-                  style={{ width:90, background:'#0f1117', border:'1px solid #1e2030', borderRadius:8, padding:'8px 12px 8px 24px', color:'#fff', fontSize:13, outline:'none', fontFamily:'monospace' }}/>
+                  style={{ width:90, background:'#ffffff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:8, padding:'8px 12px 8px 24px', color:'#1a1a1a', fontSize:15, outline:'none', fontFamily:'monospace' }}/>
               </div>
               <select value={form.frequency} onChange={e => setForm({ ...form, frequency: e.target.value })}
-                style={{ background:'#0f1117', border:'1px solid #1e2030', borderRadius:8, padding:'8px 10px', color:'#94a3b8', fontSize:12, outline:'none', fontFamily:F, cursor:'pointer' }}>
+                style={{ background:'#ffffff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:8, padding:'8px 10px', color:'#8a8a85', fontSize:14, outline:'none', fontFamily:F, cursor:'pointer' }}>
                 <option value="monthly">Monthly</option>
                 <option value="bimonthly">Every 2mo</option>
                 <option value="quarterly">Quarterly</option>
                 <option value="annual">Annual</option>
               </select>
               <button onClick={add} disabled={!form.name || !form.amount}
-                style={{ background:'#6366f1', border:'none', borderRadius:8, padding:'8px 14px', color:'#fff', fontSize:12, cursor:'pointer', fontWeight:600, fontFamily:F, opacity: !form.name || !form.amount ? 0.5 : 1 }}>Add</button>
+                style={{ background:'#e85d3c', border:'none', borderRadius:8, padding:'8px 14px', color:'#fff', fontSize:14, cursor:'pointer', fontWeight:600, fontFamily:F, opacity: !form.name || !form.amount ? 0.5 : 1 }}>Add</button>
             </div>
           )}
 
           {items.length === 0 && !adding && (
             <div style={{ padding:'16px 22px' }}>
-              <p style={{ color:'#283244', fontSize:12 }}>None added — add rent, mortgage, or car payments from accounts not uploaded.</p>
+              <p style={{ color:'#b0b0a8', fontSize:14 }}>None added — add rent, mortgage, or car payments from accounts not uploaded.</p>
             </div>
           )}
         </div>
@@ -379,22 +379,22 @@ function ContextField({ fieldKey, label, color, value, onSave }) {
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState('')
   return (
-    <div style={{ background:'#080b0f', borderRadius:12, padding:'14px 16px' }}>
+    <div style={{ background:'#faf9f5', borderRadius:12, padding:'14px 16px' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-        <span style={{ fontSize:11, color:'#334155', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.6px' }}>{label}</span>
+        <span style={{ fontSize:13, color:'#8a8a85', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.6px' }}>{label}</span>
         <button onClick={() => { setEditing(true); setVal(value ? String(value) : '') }}
-          style={{ background:'none', border:'none', color:'#334155', fontSize:11, cursor:'pointer', fontFamily:F }}>edit</button>
+          style={{ background:'none', border:'none', color:'#8a8a85', fontSize:13, cursor:'pointer', fontFamily:F }}>edit</button>
       </div>
       {editing ? (
         <div style={{ display:'flex', gap:4 }}>
-          <span style={{ color:'#475569', fontSize:13 }}>$</span>
+          <span style={{ color:'#5a5a5a', fontSize:15 }}>$</span>
           <input autoFocus type="number" value={val}
             onChange={e => setVal(e.target.value)}
             onKeyDown={e => { if(e.key==='Enter') { onSave(fieldKey, parseFloat(val)||0); setEditing(false) } if(e.key==='Escape') setEditing(false) }}
-            style={{ background:'#1e2030', border:'1px solid #3b82f6', borderRadius:6, padding:'4px 8px', color:'#fff', fontSize:14, outline:'none', fontFamily:'monospace', width:'100%' }}/>
+            style={{ background:'rgba(0,0,0,0.08)', border:'1px solid #e85d3c', borderRadius:6, padding:'4px 8px', color:'#fff', fontSize:16, outline:'none', fontFamily:'monospace', width:'100%' }}/>
         </div>
       ) : (
-        <p style={{ fontSize:20, fontWeight:800, color: value > 0 ? color : '#283244', fontFamily:'monospace' }}>
+        <p style={{ fontSize:22, fontWeight:800, color: value > 0 ? color : '#b0b0a8', fontFamily:'monospace' }}>
           {value > 0 ? fmt(value) : '—'}
         </p>
       )}
@@ -408,23 +408,23 @@ function SpendingContext({ profile, onSave }) {
   const hasAny = (profile?.income_amount > 0) || (profile?.savings_goal_monthly > 0) || (profile?.extra_payment_monthly > 0)
 
   return (
-    <div style={{ background:'#0f1117', border:'1px solid #1e2030', borderRadius:18, overflow:'hidden', marginBottom:20 }}>
+    <div style={{ background:'#ffffff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:18, overflow:'hidden', marginBottom:20 }}>
       <button onClick={() => setOpen(o => !o)}
         style={{ width:'100%', background:'none', border:'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 22px', fontFamily:F }}>
         <div style={{ textAlign:'left' }}>
-          <p style={{ color:'#64748b', fontSize:12, fontWeight:600, marginBottom:1 }}>
+          <p style={{ color:'#8a8a85', fontSize:14, fontWeight:600, marginBottom:1 }}>
             Spending context
-            {!hasAny && <span style={{ color:'#283244', fontWeight:400, marginLeft:8, fontSize:11 }}>optional</span>}
+            {!hasAny && <span style={{ color:'#b0b0a8', fontWeight:400, marginLeft:8, fontSize:13 }}>optional</span>}
           </p>
-          <p style={{ color:'#334155', fontSize:11 }}>Helps generate smarter insights — not required</p>
+          <p style={{ color:'#8a8a85', fontSize:13 }}>Helps generate smarter insights — not required</p>
         </div>
-        <span style={{ color:'#283244', fontSize:11, transform: open ? 'rotate(180deg)' : 'none', transition:'transform 0.2s', display:'inline-block' }}>▼</span>
+        <span style={{ color:'#b0b0a8', fontSize:13, transform: open ? 'rotate(180deg)' : 'none', transition:'transform 0.2s', display:'inline-block' }}>▼</span>
       </button>
       {open && (
-        <div style={{ borderTop:'1px solid #0a0d12', padding:'16px 22px' }}>
+        <div style={{ borderTop:'1px solid #faf9f5', padding:'16px 22px' }}>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
             <ContextField fieldKey="income_amount" label="Take-home pay" color="#10b981" value={profile?.income_amount||0} onSave={onSave}/>
-            <ContextField fieldKey="savings_goal_monthly" label="What you set aside" color="#3b82f6" value={profile?.savings_goal_monthly||0} onSave={onSave}/>
+            <ContextField fieldKey="savings_goal_monthly" label="What you set aside" color="#e85d3c" value={profile?.savings_goal_monthly||0} onSave={onSave}/>
             <ContextField fieldKey="extra_payment_monthly" label="Extra toward debt" color="#8b5cf6" value={profile?.extra_payment_monthly||0} onSave={onSave}/>
           </div>
         </div>
@@ -497,42 +497,42 @@ export default function Goals() {
   }
 
   return (
-    <div style={{ padding:'32px 48px 64px', maxWidth:1200, margin:'0 auto', fontFamily:F, background:'#080b0f', minHeight:'100vh' }}>
+    <div style={{ padding:'32px 48px 64px', maxWidth:1200, margin:'0 auto', fontFamily:F, background:'#fafaf5', minHeight:'100vh' }}>
 
       {/* Header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:32 }}>
         <div>
-          <h1 style={{ fontSize:26, fontWeight:800, color:'#f1f5f9', letterSpacing:'-0.5px', marginBottom:6 }}>Projects</h1>
-          <p style={{ color:'#475569', fontSize:13 }}>
+          <h1 style={{ fontSize:28, fontWeight:800, color:'#1a1a1a', letterSpacing:'-0.5px', marginBottom:6 }}>Projects</h1>
+          <p style={{ color:'#5a5a5a', fontSize:15 }}>
             Categories show <em>what</em> you spent. Projects show <em>why</em>.
           </p>
         </div>
         <button onClick={() => setShowModal(true)}
-          style={{ background:'#6366f1', color:'#fff', border:'none', borderRadius:10, padding:'10px 20px', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:F }}>
+          style={{ background:'#e85d3c', color:'#fff', border:'none', borderRadius:10, padding:'10px 20px', fontSize:15, fontWeight:700, cursor:'pointer', fontFamily:F }}>
           + New project
         </button>
       </div>
 
       {/* Projects — MAIN FOCUS */}
       {loading ? (
-        <div style={{ color:'#475569', fontSize:13, marginBottom:32 }}>Loading…</div>
+        <div style={{ color:'#5a5a5a', fontSize:15, marginBottom:32 }}>Loading…</div>
       ) : projects.length === 0 ? (
-        <div style={{ background:'#0f1117', border:'1px solid #1e2030', borderRadius:20, padding:'56px 32px', textAlign:'center', marginBottom:24 }}>
-          <div style={{ fontSize:48, marginBottom:16 }}>📁</div>
-          <h2 style={{ color:'#f1f5f9', fontSize:20, fontWeight:700, marginBottom:8 }}>Track spending with purpose</h2>
-          <p style={{ color:'#475569', fontSize:14, marginBottom:8, maxWidth:400, margin:'0 auto 16px' }}>
+        <div style={{ background:'#ffffff', border:'1px solid rgba(0,0,0,0.08)', borderRadius:20, padding:'56px 32px', textAlign:'center', marginBottom:24 }}>
+          <div style={{ fontSize:50, marginBottom:16 }}>📁</div>
+          <h2 style={{ color:'#1a1a1a', fontSize:22, fontWeight:700, marginBottom:8 }}>Track spending with purpose</h2>
+          <p style={{ color:'#5a5a5a', fontSize:16, marginBottom:8, maxWidth:400, margin:'0 auto 16px' }}>
             Create a project for anything that matters — a trip, home renovation, wedding, or big purchase.
           </p>
-          <p style={{ color:'#334155', fontSize:12, marginBottom:28 }}>
+          <p style={{ color:'#8a8a85', fontSize:14, marginBottom:28 }}>
             Tag transactions to a project — like adding songs to a playlist.
           </p>
           <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap', marginBottom:28 }}>
             {['✈️ Trip', '🏠 Home', '💍 Wedding', '🛍️ Big Purchase'].map(ex => (
-              <span key={ex} style={{ background:'#0a0d12', border:'1px solid #1e2030', borderRadius:10, padding:'8px 16px', fontSize:13, color:'#64748b' }}>{ex}</span>
+              <span key={ex} style={{ background:'#faf9f5', border:'1px solid rgba(0,0,0,0.08)', borderRadius:10, padding:'8px 16px', fontSize:15, color:'#8a8a85' }}>{ex}</span>
             ))}
           </div>
           <button onClick={() => setShowModal(true)}
-            style={{ background:'#6366f1', color:'#fff', border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:F }}>
+            style={{ background:'#e85d3c', color:'#fff', border:'none', borderRadius:12, padding:'12px 28px', fontSize:16, fontWeight:700, cursor:'pointer', fontFamily:F }}>
             + Create your first project
           </button>
         </div>
@@ -542,23 +542,16 @@ export default function Goals() {
             <ProjectCard key={p.id} project={p} onDelete={handleDelete} allTransactions={allTransactions} />
           ))}
           <button onClick={() => setShowModal(true)}
-            style={{ background:'transparent', border:'2px dashed #1e2030', borderRadius:18, padding:'32px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer', color:'#334155', fontFamily:F, transition:'border-color 0.2s' }}
-            onMouseEnter={e => e.currentTarget.style.borderColor='#6366f1'}
-            onMouseLeave={e => e.currentTarget.style.borderColor='#1e2030'}>
-            <span style={{ fontSize:24 }}>+</span>
-            <span style={{ fontSize:13 }}>New project</span>
+            style={{ background:'transparent', border:'2px dashed rgba(0,0,0,0.08)', borderRadius:18, padding:'32px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer', color:'#8a8a85', fontFamily:F, transition:'border-color 0.2s' }}
+            onMouseEnter={e => e.currentTarget.style.borderColor='#e85d3c'}
+            onMouseLeave={e => e.currentTarget.style.borderColor='rgba(0,0,0,0.08)'}>
+            <span style={{ fontSize:26 }}>+</span>
+            <span style={{ fontSize:15 }}>New project</span>
           </button>
         </div>
       )}
 
-      {/* Spending Impact */}
-      <SpendingImpact profile={profile} expenses={expenses} topCategories={topCategories} allTransactions={allTransactions} />
-
-      {/* Monthly Commitments */}
-      <MonthlyCommitments />
-
-      {/* Spending Context */}
-      <SpendingContext profile={profile} onSave={saveProfile} />
+      {/* Spending Impact — hidden for now; see roadmap. Component definition retained above. */}
 
       {showModal && <CreateProjectModal onClose={() => setShowModal(false)} onCreated={load} />}
     </div>

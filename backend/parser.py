@@ -419,8 +419,15 @@ def parse_ofx(file_bytes: bytes, bank_hint: str = None) -> tuple:
             if amount == 0:
                 continue
 
-            # Description — use memo if available, else name
-            desc = str(t.memo or t.payee or t.id or '').strip()
+            # Description — prefer the cleaner merchant field. memo is often the
+            # rawest (mashed names), so try payee/name first, fall back to memo.
+            desc = str(
+                getattr(t, 'payee', None)
+                or getattr(t, 'name', None)
+                or t.memo
+                or t.id
+                or ''
+            ).strip()
             if not desc:
                 continue
 
@@ -547,21 +554,72 @@ def normalize_amount(amount_str: str) -> float:
     except:
         return None
 
+def _detect_header_skip(file_bytes: bytes) -> int:
+    """Scan raw CSV lines for the real transaction header row.
+    Banks like BofA prepend a balance-summary block (with its own multi-column
+    header) before the actual 'Date,Description,Amount,...' table. Return the
+    number of rows to skip so pandas reads the real header. 0 if none needed."""
+    try:
+        text = file_bytes.decode('utf-8', errors='ignore')
+    except Exception:
+        text = file_bytes.decode('latin-1', errors='ignore')
+    lines = text.splitlines()
+    for i, line in enumerate(lines[:25]):  # only scan the top of the file
+        low = line.lower()
+        has_date = 'date' in low
+        has_amt = ('amount' in low) or ('amt' in low)
+        has_desc = ('description' in low) or ('payee' in low) or ('memo' in low)
+        # A real transaction header has a date column AND (amount or description),
+        # and isn't a summary line like 'Description,,Summary Amt.'
+        if has_date and (has_amt or has_desc) and 'summary' not in low:
+            return i
+    return 0
+
+
+def _detect_bank_from_raw(file_bytes: bytes) -> str:
+    """Detect the account's bank from the FULL raw CSV text (preamble included),
+    before any header-skip strips it. Strong account-level signals (statement header,
+    'Beginning balance', institution name) take priority over transaction-row content,
+    so e.g. a BofA statement that mentions 'CHASE CREDIT CRD' in a payment line is not
+    misread as Chase."""
+    try:
+        text = file_bytes.decode('utf-8', errors='ignore').lower()
+    except Exception:
+        text = file_bytes.decode('latin-1', errors='ignore').lower()
+    head = text[:1500]  # the preamble / statement header lives at the very top
+    # BofA's CSV signature: balance-summary preamble.
+    if 'bank of america' in head or ('beginning balance' in head and 'ending balance' in head):
+        return 'Bank of America'
+    if 'american express' in head or 'amex' in head:
+        return 'American Express'
+    if 'wells fargo' in head:
+        return 'Wells Fargo'
+    if 'discover' in head:
+        return 'Discover'
+    if 'citibank' in head or 'citi ' in head:
+        return 'Citi'
+    if 'chase' in head or 'jpmorgan' in head:
+        return 'Chase'
+    return None
+
+
 def parse_csv(file_bytes: bytes, bank_hint: str = None) -> tuple:
+    # Detect and skip any summary preamble (BofA etc.) BEFORE reading.
+    header_skip = _detect_header_skip(file_bytes)
+
     # Try multiple encodings
     for encoding in ['utf-8', 'latin-1', 'cp1252']:
         try:
-            df = pd.read_csv(io.BytesIO(file_bytes), encoding=encoding, skip_blank_lines=True)
+            df = pd.read_csv(io.BytesIO(file_bytes), encoding=encoding,
+                             skiprows=header_skip, skip_blank_lines=True)
             break
         except:
             continue
     else:
         return [], 'Unknown Bank'
 
-    # Skip extra header rows (some banks have 2-3 rows before real headers)
-    # Find the row that looks like real headers
+    # Fallback: if still no usable columns, try skipping a few rows like before.
     if len(df.columns) < 2:
-        # Try skipping first few rows
         for skip in range(1, 6):
             try:
                 df = pd.read_csv(io.BytesIO(file_bytes), encoding='latin-1', skiprows=skip, skip_blank_lines=True)
@@ -570,12 +628,14 @@ def parse_csv(file_bytes: bytes, bank_hint: str = None) -> tuple:
             except:
                 continue
 
-    # Detect bank from content
+    # Detect bank: account-level raw signal (preamble/header) FIRST, then filename hint,
+    # then transaction-content sniffing as a last resort.
+    raw_bank = _detect_bank_from_raw(file_bytes)
     text = ' '.join([str(c).lower() for c in df.columns])
     for row in df.head(5).values:
         text += ' ' + ' '.join([str(v).lower() for v in row if v and str(v) != 'nan'])
 
-    bank = detect_bank_from_text(text) or bank_hint or 'Unknown Bank'
+    bank = raw_bank or bank_hint or detect_bank_from_text(text) or 'Unknown Bank'
     return rows_from_dataframe(df, bank, 'csv'), bank
 
 def parse_toll_xlsx(file_bytes: bytes) -> tuple:
@@ -664,11 +724,11 @@ def parse_excel(file_bytes: bytes, bank_hint: str = None) -> tuple:
         # Scans the first 8 rows (incl. column names) for bank-specific markers.
         if not bank_hint:
             BANK_MARKERS = {
-                'Amex': ['platinum card', 'gold card', 'american express',
+                'American Express': ['platinum card', 'gold card', 'american express',
                          'amex everyday', 'blue cash'],
                 'Chase': ['chase ink', 'chase sapphire', 'chase freedom',
                           'jpmorgan chase'],
-                'BofA': ['bank of america', 'bofa'],
+                'Bank of America': ['bank of america', 'bofa'],
                 'Wells Fargo': ['wells fargo', 'wellsfargo'],
                 'Discover': ['discover it', 'discover card'],
                 'Citi': ['citibank', 'citi double cash', 'citi premier'],
@@ -864,8 +924,15 @@ def parse_pdf(file_bytes: bytes, filename: str, bank_hint: str = None) -> tuple:
         if raw_amt == 0:
             continue
 
-        # Fix sign convention for PDF-parsed transactions
-        amount = fix_amount_for_bank(raw_amt, desc, final_bank, False)
+        # If the parser already determined this is money BACK (refund/credit), keep it
+        # positive and skip the generic sign-flip. Otherwise normalize via bank rules.
+        _ptype = t.get('transaction_type')
+        if _ptype in ('refund', 'card_credit'):
+            amount = abs(raw_amt)
+        elif _ptype in ('credit_card_payment', 'loan_payment'):
+            amount = -abs(raw_amt)
+        else:
+            amount = fix_amount_for_bank(raw_amt, desc, final_bank, False)
 
         if skip_non_transaction_row(desc, amount):
             continue
@@ -885,22 +952,37 @@ def parse_pdf(file_bytes: bytes, filename: str, bank_hint: str = None) -> tuple:
             'status': 'posted',
             'import_source': 'pdf',
             'bank_source': final_bank,
+            'transaction_type': t.get('transaction_type'),  # preserve parser's type
         })
     return transactions, final_bank
 
-def load_merchant_rules(db) -> list:
-    """Load active merchant rules from DB for classifier."""
+def load_merchant_rules(db, user_id=None) -> list:
+    """Load active merchant rules for the classifier.
+    Returns this user's rules PLUS global/system rules (user_id IS NULL),
+    so per-user learning stays private while system defaults still apply.
+    """
     try:
         import sqlalchemy as _sa
-        rows = db.execute(_sa.text('''
-            SELECT id, user_id, match_field, match_value, match_type,
-                   transaction_type, category, priority, source, 
-                   confidence_override, is_active
-            FROM merchant_rules
-            WHERE is_active = 1
-            ORDER BY priority DESC, 
-            CASE match_type WHEN 'exact' THEN 0 WHEN 'starts_with' THEN 1 WHEN 'contains' THEN 2 ELSE 3 END
-        ''')).fetchall()
+        if user_id is not None:
+            rows = db.execute(_sa.text('''
+                SELECT id, user_id, match_field, match_value, match_type,
+                       transaction_type, category, priority, source,
+                       confidence_override, is_active
+                FROM merchant_rules
+                WHERE is_active = 1 AND (user_id = :uid OR user_id IS NULL)
+                ORDER BY priority DESC,
+                CASE match_type WHEN 'exact' THEN 0 WHEN 'starts_with' THEN 1 WHEN 'contains' THEN 2 ELSE 3 END
+            '''), {"uid": user_id}).fetchall()
+        else:
+            rows = db.execute(_sa.text('''
+                SELECT id, user_id, match_field, match_value, match_type,
+                       transaction_type, category, priority, source,
+                       confidence_override, is_active
+                FROM merchant_rules
+                WHERE is_active = 1
+                ORDER BY priority DESC,
+                CASE match_type WHEN 'exact' THEN 0 WHEN 'starts_with' THEN 1 WHEN 'contains' THEN 2 ELSE 3 END
+            ''')).fetchall()
         return [dict(r._mapping) for r in rows]
     except:
         return []
@@ -910,8 +992,8 @@ CANONICAL_CATEGORIES = {
     "Food & Dining", "Groceries", "Transport", "Bills & Utilities",
     "Subscriptions", "Health", "Shopping", "Entertainment", "Travel",
     "Personal Care", "Pets", "Education", "Loan Payment",
-    "Credit Card Payment", "Refund", "Salary", "Other Income",
-    "Transfer", "Other", "Alcohol & Liquor", "Baby & Kids",
+    "Credit Card Payment", "Refund", "Salary",
+    "Transfer", "Other", "Baby & Kids",
     "Bank Fees", "Card Credit", "Cash & ATM", "Gifts & Donations",
     "Government & Taxes", "Home Improvement", "Insurance",
     "Professional Services",
@@ -1007,6 +1089,14 @@ def enrich_transaction(tx: dict, user_rules: list = None) -> dict:
     tx_type, category, confidence, needs_review = classify_transaction(
         tx['description'], tx['amount'], bank=tx.get('bank_source'), user_rules=user_rules
     )
+    # Preserve definitive types the PARSER determined from statement structure/sign
+    # (e.g. Chase inline refunds, card credits, payments). The keyword classifier
+    # can misread these — e.g. a positive refund amount as 'income'. The parser saw
+    # the statement layout/sign, so trust it for these specific types.
+    parser_type = tx.get('transaction_type')
+    if parser_type in ('refund', 'card_credit', 'credit_card_payment', 'loan_payment'):
+        tx_type = parser_type
+        confidence = 'high'
     # OFX provides reliable type hints — use them for high confidence cases
     type_hint = tx.pop('_tx_type_hint', None)
     if type_hint and type_hint != 'unknown' and confidence != 'high':

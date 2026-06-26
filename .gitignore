@@ -1,12 +1,63 @@
-# Python
-backend/venv/
-backend/__pycache__/
-backend/*.db
+# Secrets — NEVER commit
+.env
+.env.*
+!.env.example
 backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
 
-# Node
+# Database
+*.db
+*.sqlite
+*.sqlite3
+backend/financeai.db
+
+# Python
+venv/
+backend/venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Backups & patch clutter
+*.bak
+*.bak_*
+*.backup
+*.backup-patch*
+backend/*.bak*
+frontend/src/pages/*.bak*
+frontend/src/pages/*.backup-patch*
+
+# Node / frontend build
+node_modules/
 frontend/node_modules/
 frontend/dist/
 
-# System
+# OS / editor
 .DS_Store
+.vscode/
+.idea/
+
+# DB backups (named .db.backup-... and .db.preclear_...)
+*.db.backup*
+*.db.preclear*
+backend/*.db.backup*
+backend/*.db.preclear*
+
+# Patch / one-off scripts (don't ship)
+patch*.py
+backend/patch*.py
+frontend/patch*.py
+isolation_audit*.py
+backend/isolation_audit*.py
+migrate.py
+
+# Stray scratch files
+frontend/3
+frontend/flex
+
+# More backup patterns
+*.backup-*
+*-backup-*

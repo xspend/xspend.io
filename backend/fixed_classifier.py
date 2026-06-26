@@ -21,7 +21,7 @@ FIXED_CATEGORIES = {
     'auto & transport', 'home', 'health & fitness', 'personal finance',
     # BofA aliases
     'cable & satellite', 'telephone services', 'home improvement',
-    'rent & mortgage', 'loans & mortgages',
+    'rent & mortgage', 'loans & mortgages', 'rent/mortgage',
     # Amex aliases
     'telecommunications', 'utilities & home services',
     # Wells Fargo aliases
@@ -140,10 +140,38 @@ def display_merchant(description: str) -> str:
 
     d = description.strip()
 
+    # ACH descriptions (BofA checking, ACH debits/credits): cut everything from
+    # 'DES:' onward — that's the payment-type + ID + counterparty name + routing
+    # junk. Keep only the originator/biller name. e.g.
+    #   'LAKEVIEW LN SRV DES:MTG PYMT ID:.. INDN:.. CO ID:.. WEB' -> 'LAKEVIEW LN SRV'
+    d = re.split(r'\s+des:', d, maxsplit=1, flags=re.I)[0]
+    # If no DES: marker, still strip trailing ACH field markers when present.
+    d = re.sub(r'\s+(id|indn|co\s?id|ppd|ccd|web|tel|arc)\b.*$', '', d, flags=re.I)
+
+    # Strip space-form payment-processor prefixes (SQ *X, TST* X, etc.). The noise
+    # stripper below handles the no-space 'SQ*X' form; this catches 'SQ ' with a space.
+    d = re.sub(r'^(?:sq|tst|toast|dd|dsh|pp|paypal|sp|clkbank|wpy|gum)\s+\*?\s*',
+               '', d, flags=re.I)
+
     # Strip noise tokens
     d = re.sub(r'\b[A-Z0-9]*\*[A-Z0-9]+', '', d)         # *XYZ123 or PREFIX*XYZ123
     d = re.sub(r'#\d+', '', d)                            # #0106 location codes
     d = re.sub(r'\b\d{6,}\b', '', d)                    # 6+ digit references
+    # High-entropy alphanumeric codes (Airbnb 'Hme2z9qj9n', Amazon 'Dy3g80Sk3'): 6+ char
+    # tokens with >=3 letter<->digit transitions. Word+number names like 'forever21' or
+    # '7eleven' have only 1 transition and are preserved.
+    def _strip_codes(s):
+        out = []
+        for tok in s.split():
+            core = tok.strip('.,;:#*-')
+            if len(core) >= 6 and core.isalnum() and not core.isalpha() and not core.isdigit():
+                transitions = sum(1 for a, b in zip(core, core[1:])
+                                  if a.isdigit() != b.isdigit())
+                if transitions >= 3:
+                    continue  # drop this token
+            out.append(tok)
+        return ' '.join(out)
+    d = _strip_codes(d)
     d = re.sub(r'\d{1,2}/\d{1,2}(?:/\d{2,4})?', '', d)  # mm/dd or mm/dd/yyyy
     d = re.sub(r'\bhttps?://\S+', '', d)                 # full URLs
     d = re.sub(r'\b[a-z0-9-]+\.(?:com|net|org|io|co)\b', '', d, flags=re.I)  # domains
@@ -160,8 +188,41 @@ def display_merchant(description: str) -> str:
     d = re.sub(r'\b[A-Z]{2}\b\s*$', '', d, flags=re.I)  # trailing 2-letter state/abbrev
     d = re.sub(r'\s+', ' ', d).strip()
 
+    # ATM / repeated-name cleanup (e.g. 'KUSHKLUB - S-7 WITHDRWL KUSHKLUB - S-7690 TUKWILA').
+    d = re.sub(r'\b(withdrwl|withdrawal|bal\s*inq|balance\s*inquiry|atm|pos\s*debit|debit\s*card|purchase)\b', ' ', d, flags=re.I)
+    d = re.sub(r'\bs-?\d+\b', ' ', d, flags=re.I)              # store codes like S-7, S-7690
+    d = re.sub(r'\b(llc|inc|co|corp|ltd|usa)\b\.?', ' ', d, flags=re.I)  # legal/region suffixes
+    d = re.sub(r'_[a-z]{2,}\b', ' ', d, flags=re.I)             # '_us' style suffixes
+    d = re.sub(r'[-]+', ' ', d)                                   # leftover dashes
+    d = re.sub(r'\s+', ' ', d).strip()
+    # Collapse a repeated leading phrase: 'Kushklub ... Kushklub ...' -> 'Kushklub ...'
+    _toks = d.split()
+    if len(_toks) >= 2:
+        for first_len in (3, 2, 1):
+            if len(_toks) >= first_len * 2:
+                head = _toks[:first_len]
+                # find the next occurrence of head[0] after the head
+                for j in range(first_len, len(_toks)):
+                    if _toks[j].lower() == head[0].lower():
+                        d = ' '.join(_toks[:j]).strip()
+                        break
+                else:
+                    continue
+                break
+    d = re.sub(r'\s+', ' ', d).strip()
+
     if not d:
         return description.strip()[:50]
+
+    # Generic friendly-name overrides for common ugly biller patterns (not specific
+    # merchant names). Checked case-insensitively on the cleaned text.
+    _friendly = [
+        (r'\bhoa\b|homeowner.?(assoc|dues)', 'HOA Payment'),
+    ]
+    _low = d.lower()
+    for pat, label in _friendly:
+        if re.search(pat, _low):
+            return label
 
     # Title case with smart rules
     SMALL_WORDS = {'by', 'of', 'the', 'and', 'or', 'for', 'a', 'an', 'at', 'to', 'in', 'on'}
@@ -327,6 +388,24 @@ def classify_transaction(tx: dict, all_transactions: list) -> dict:
             'label': 'fixed',
         }
 
+    # Hard-fixed CATEGORY override: rent/mortgage, loan payments, insurance, etc. are
+    # definitionally fixed regardless of amount size or recurrence. Without this, a
+    # large mortgage payment gets flagged as an 'irregular' amount outlier below and
+    # wrongly marked discretionary before the category logic runs.
+    _hard_fixed_cats = {
+        'rent/mortgage', 'rent', 'mortgage', 'rent & mortgage', 'loans & mortgages',
+        'loan payment', 'car payment', 'student loan', 'personal loan', 'debt payment',
+        'insurance', 'auto insurance', 'health insurance', 'life insurance',
+        'subscriptions', 'subscription', 'membership', 'bills & utilities',
+    }
+    if (tx.get('category', '') or '').lower().strip() in _hard_fixed_cats:
+        return {
+            'is_fixed': True,
+            'confidence': 0.95,
+            'source': 'category_override',
+            'label': 'fixed',
+        }
+
     merchant_key = normalize_merchant(tx.get('description', ''))
     cat_label, cat_conf = category_signal(tx.get('category', ''))
     rec_label, rec_conf = recurrence_signal(merchant_key, all_transactions)
@@ -455,7 +534,8 @@ def get_fixed_summary(transactions: list) -> dict:
 
         items.append({
             'merchant': display,
-            'amount': round(avg, 2),
+            'amount': round(sum(amounts), 2),   # honest period total (real charges summed)
+            'avg': round(avg, 2),               # per-occurrence average (for single-month display)
             'varies': varies,
             'occurrences': len(amounts)
         })

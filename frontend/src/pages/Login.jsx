@@ -99,7 +99,7 @@ export default function Login() {
             </span>
             <span style={{
               fontWeight: 500,
-              fontSize: 18,
+              fontSize: 20,
               color: C.text,
               letterSpacing: 1.8,
             }}>XSPEND</span>
@@ -114,7 +114,7 @@ export default function Login() {
           padding: '36px 32px',
         }}>
           <h1 style={{
-            fontSize: 24,
+            fontSize: 26,
             fontWeight: 500,
             color: C.text,
             margin: '0 0 6px',
@@ -124,7 +124,7 @@ export default function Login() {
             Welcome back
           </h1>
           <p style={{
-            fontSize: 14,
+            fontSize: 16,
             color: C.textMuted,
             textAlign: 'center',
             margin: '0 0 28px',
@@ -140,7 +140,7 @@ export default function Login() {
               padding: '10px 14px',
               marginBottom: 18,
             }}>
-              <p style={{ color: C.errorText, fontSize: 13, margin: 0 }}>{error}</p>
+              <p style={{ color: C.errorText, fontSize: 15, margin: 0 }}>{error}</p>
             </div>
           )}
 
@@ -167,6 +167,15 @@ export default function Login() {
                 placeholder="Your password"
                 style={inputStyle}
               />
+              <div style={{ textAlign: 'right', marginTop: 8 }}>
+                <Link to="/forgot-password" style={{
+                  fontSize: 14,
+                  color: C.textHint,
+                  textDecoration: 'none',
+                }}>
+                  Forgot password?
+                </Link>
+              </div>
             </div>
           </div>
 
@@ -180,7 +189,7 @@ export default function Login() {
               border: 'none',
               borderRadius: 10,
               padding: '13px 20px',
-              fontSize: 15,
+              fontSize: 17,
               fontWeight: 500,
               cursor: loading ? 'default' : 'pointer',
               opacity: loading ? 0.6 : 1,
@@ -193,7 +202,7 @@ export default function Login() {
           </button>
 
           <p style={{
-            fontSize: 13,
+            fontSize: 15,
             color: C.textMuted,
             textAlign: 'center',
             margin: '20px 0 0',
@@ -213,7 +222,7 @@ export default function Login() {
         {/* Back to landing */}
         <div style={{ textAlign: 'center', marginTop: 24 }}>
           <Link to="/" style={{
-            fontSize: 13,
+            fontSize: 15,
             color: C.textHint,
             textDecoration: 'none',
           }}>
@@ -228,7 +237,7 @@ export default function Login() {
 
 const labelStyle = {
   display: 'block',
-  fontSize: 12,
+  fontSize: 14,
   fontWeight: 500,
   color: '#5a5a5a',
   marginBottom: 6,
@@ -241,7 +250,7 @@ const inputStyle = {
   borderRadius: 10,
   padding: '12px 14px',
   color: '#1a1a1a',
-  fontSize: 15,
+  fontSize: 17,
   outline: 'none',
   fontFamily: 'inherit',
   width: '100%',

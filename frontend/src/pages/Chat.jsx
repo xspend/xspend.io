@@ -47,8 +47,8 @@ export default function Chat() {
   return (
     <div className="p-8 max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-white mb-1">AI Chat</h1>
-        <p className="text-[#55556a] text-sm">Ask anything about your finances</p>
+        <h1 className="text-2xl font-semibold text-[#1a1a1a] mb-1">AI Chat</h1>
+        <p className="text-[#5a5a5a] text-sm">Ask anything about your finances</p>
       </div>
 
       <div style={{border:'1px solid #1a1a28'}} className="bg-[#12121e] rounded-xl flex flex-col h-[520px]">
@@ -70,7 +70,7 @@ export default function Chat() {
           {loading && (
             <div className="flex items-start gap-2">
               <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">x</div>
-              <div style={{border:'1px solid #2a2a3a'}} className="bg-[#1a1a28] px-4 py-3 rounded-xl text-sm text-[#55556a]">
+              <div style={{border:'1px solid #2a2a3a'}} className="bg-[#1a1a28] px-4 py-3 rounded-xl text-sm text-[#b8b8c8]">
                 Analysing...
               </div>
             </div>
@@ -84,7 +84,7 @@ export default function Chat() {
               <button
                 key={s}
                 onClick={() => send(s)}
-                className="text-xs text-[#55556a] hover:text-white bg-[#1a1a28] hover:bg-[#2a2a3a] px-3 py-1.5 rounded-lg transition-all"
+                className="text-xs text-[#b8b8c8] hover:text-white bg-[#1a1a28] hover:bg-[#2a2a3a] px-3 py-1.5 rounded-lg transition-all border border-[#2a2a3a]"
               >
                 {s}
               </button>
@@ -96,7 +96,7 @@ export default function Chat() {
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send()}
               placeholder="Ask about your finances..."
-              className="flex-1 bg-transparent text-white text-sm outline-none placeholder-[#55556a]"
+              className="flex-1 bg-transparent text-white text-sm outline-none placeholder-[#8a8a9a]"
             />
             <button
               onClick={() => send()}

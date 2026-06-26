@@ -23,7 +23,7 @@ const C = {
 }
 
 export default function Signup() {
-  const [form, setForm] = useState({ email: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
@@ -33,8 +33,8 @@ export default function Signup() {
       setError('Please enter your email and password')
       return
     }
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters')
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters')
       return
     }
     setLoading(true)
@@ -44,6 +44,7 @@ export default function Signup() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name: form.name,
           email: form.email,
           password: form.password,
         })
@@ -109,7 +110,7 @@ export default function Signup() {
             </span>
             <span style={{
               fontWeight: 500,
-              fontSize: 18,
+              fontSize: 20,
               color: C.text,
               letterSpacing: 1.8,
             }}>XSPEND</span>
@@ -124,7 +125,7 @@ export default function Signup() {
           padding: '36px 32px',
         }}>
           <h1 style={{
-            fontSize: 24,
+            fontSize: 26,
             fontWeight: 500,
             color: C.text,
             margin: '0 0 6px',
@@ -134,7 +135,7 @@ export default function Signup() {
             Create your account
           </h1>
           <p style={{
-            fontSize: 14,
+            fontSize: 16,
             color: C.textMuted,
             textAlign: 'center',
             margin: '0 0 28px',
@@ -150,11 +151,23 @@ export default function Signup() {
               padding: '10px 14px',
               marginBottom: 18,
             }}>
-              <p style={{ color: C.errorText, fontSize: 13, margin: 0 }}>{error}</p>
+              <p style={{ color: C.errorText, fontSize: 15, margin: 0 }}>{error}</p>
             </div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={labelStyle}>Name</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                onKeyDown={handleKeyDown}
+                placeholder="Your name"
+                style={inputStyle}
+                autoFocus
+              />
+            </div>
             <div>
               <label style={labelStyle}>Email</label>
               <input
@@ -164,7 +177,7 @@ export default function Signup() {
                 onKeyDown={handleKeyDown}
                 placeholder="you@example.com"
                 style={inputStyle}
-                autoFocus
+                autoComplete="off"
               />
             </div>
             <div>
@@ -174,8 +187,9 @@ export default function Signup() {
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 onKeyDown={handleKeyDown}
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters"
                 style={inputStyle}
+                autoComplete="new-password"
               />
             </div>
           </div>
@@ -190,7 +204,7 @@ export default function Signup() {
               border: 'none',
               borderRadius: 10,
               padding: '13px 20px',
-              fontSize: 15,
+              fontSize: 17,
               fontWeight: 500,
               cursor: loading ? 'default' : 'pointer',
               opacity: loading ? 0.6 : 1,
@@ -203,7 +217,7 @@ export default function Signup() {
           </button>
 
           <p style={{
-            fontSize: 13,
+            fontSize: 15,
             color: C.textMuted,
             textAlign: 'center',
             margin: '20px 0 0',
@@ -223,7 +237,7 @@ export default function Signup() {
         {/* Back to landing */}
         <div style={{ textAlign: 'center', marginTop: 24 }}>
           <Link to="/" style={{
-            fontSize: 13,
+            fontSize: 15,
             color: C.textHint,
             textDecoration: 'none',
           }}>
@@ -238,7 +252,7 @@ export default function Signup() {
 
 const labelStyle = {
   display: 'block',
-  fontSize: 12,
+  fontSize: 14,
   fontWeight: 500,
   color: '#5a5a5a',
   marginBottom: 6,
@@ -251,7 +265,7 @@ const inputStyle = {
   borderRadius: 10,
   padding: '12px 14px',
   color: '#1a1a1a',
-  fontSize: 15,
+  fontSize: 17,
   outline: 'none',
   fontFamily: 'inherit',
   width: '100%',

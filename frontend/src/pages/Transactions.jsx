@@ -2,9 +2,11 @@ import { useState, useEffect, useMemo } from 'react'
 import { API_URL } from '../lib/config'
 
 const DEFAULT_CATEGORIES = [
-  'Food & Dining','Groceries','Transport','Rent & Utilities',
-  'Subscriptions','Health','Shopping','Entertainment','Travel',
-  'Personal Care','Pets','Education','Rent & Utilities','Government & Taxes','Bank Fees','Gifts & Donations','Professional Services','Baby & Kids','Alcohol & Liquor','Transfer','Credit Card Payment','Other'
+  'Food & Dining','Groceries','Transport','Rent/Mortgage','Bills & Utilities',
+  'Subscriptions','Insurance','Loan Payment','Health','Shopping','Entertainment','Travel',
+  'Personal Care','Pets','Education','Home Improvement','Government & Taxes','Bank Fees',
+  'Gifts & Donations','Professional Services','Baby & Kids','Cash & ATM',
+  'Transfer','Credit Card Payment','Refund','Other'
 ]
 
 const F = 'DM Sans, Inter, sans-serif'
@@ -29,24 +31,24 @@ function ProjectDropdown({ tx, projects, onAssign }) {
   return (
     <div style={{ position: 'relative' }}>
       <button onClick={() => setOpen(o => !o)}
-        style={{ background: current ? 'rgba(139,92,246,0.1)' : 'none', border: `1px solid ${current ? 'rgba(139,92,246,0.3)' : '#1e2030'}`, borderRadius: 7, padding: '3px 10px', fontSize: 11, color: current ? '#8b5cf6' : '#334155', cursor: 'pointer', fontFamily: F, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
+        style={{ background: current ? 'rgba(99,102,241,0.1)' : 'none', border: `1px solid ${current ? 'rgba(99,102,241,0.3)' : 'rgba(0,0,0,0.12)'}`, borderRadius: 7, padding: '5px 12px', fontSize: 16, color: current ? '#6366f1' : '#5a5a5a', cursor: 'pointer', fontFamily: F, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
         {current ? `📁 ${current.name}` : '+ Project'}
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, background: '#0f1117', border: '1px solid #1e2030', borderRadius: 12, padding: 6, minWidth: 180, zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, background: '#ffffff', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 12, padding: 6, minWidth: 180, zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}
           onClick={e => e.stopPropagation()}>
           {current && (
             <button onClick={() => assign(null)}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8, border: 'none', background: 'transparent', color: '#475569', fontSize: 12, cursor: 'pointer', fontFamily: F }}>
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8, border: 'none', background: 'transparent', color: '#5a5a5a', fontSize: 16, cursor: 'pointer', fontFamily: F }}>
               ✕ Remove project
             </button>
           )}
           {projects.length === 0 ? (
-            <div style={{ padding: '8px 12px', color: '#334155', fontSize: 12 }}>No projects yet — create one in Goals</div>
+            <div style={{ padding: '8px 12px', color: '#334155', fontSize: 14 }}>No projects yet — create one in Goals</div>
           ) : (
             projects.map(p => (
               <button key={p.id} onClick={() => assign(p.id)}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8, border: 'none', background: tx.project_id === p.id ? '#1e2030' : 'transparent', color: tx.project_id === p.id ? '#8b5cf6' : '#94a3b8', fontSize: 12, cursor: 'pointer', fontFamily: F }}>
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8, border: 'none', background: tx.project_id === p.id ? 'rgba(99,102,241,0.1)' : 'transparent', color: tx.project_id === p.id ? '#6366f1' : '#5a5a5a', fontSize: 16, cursor: 'pointer', fontFamily: F }}>
                 📁 {p.name}
                 {tx.project_id === p.id && <span style={{ float: 'right', color: '#8b5cf6' }}>✓</span>}
               </button>
@@ -125,7 +127,7 @@ export default function Transactions() {
 
   const saveEdit = async id => {
     try {
-      await fetch(`${API_URL}/transactions/${id}`, {
+      const _r = await fetch(`${API_URL}/transactions/${id}`, {
         method: 'PATCH', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           transaction_date: editRow.transaction_date,
@@ -135,17 +137,39 @@ export default function Transactions() {
           notes: editRow.notes,
         })
       })
-      setTxs(p => p.map(t => t.id===id ? {...t,...editRow, amount:parseFloat(editRow.amount)} : t))
+      const _d = await _r.json().catch(() => null)
+      const _tx = _d && _d.transaction ? _d.transaction : null
+      setTxs(p => p.map(t => t.id===id ? (_tx ? {...t, ..._tx} : {...t,...editRow, amount:parseFloat(editRow.amount), needs_review:false, review_status:'reviewed'}) : t))
     } catch {}
     setEditingId(null)
   }
 
   const updateCategory = async (id, category) => {
     setTxs(p => p.map(t => t.id===id ? {...t, category} : t))
-    await fetch(`${API_URL}/transactions/${id}`, {
+    const _r = await fetch(`${API_URL}/transactions/${id}`, {
       method: 'PATCH', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({category})
-    }).catch(() => {})
+    }).catch(() => null)
+    const _d = _r ? await _r.json().catch(() => null) : null
+    if (_d && _d.transaction) {
+      setTxs(p => p.map(t => t.id===id ? {...t, ..._d.transaction} : t))
+    } else {
+      setTxs(p => p.map(t => t.id===id ? {...t, needs_review:false, review_status:'reviewed'} : t))
+    }
+  }
+
+  // "Looks good" — clear the REVIEW flag without changing anything. Any PATCH
+  // trips the backend's auto-clear; we apply the returned row.
+  const dismissReview = async (id) => {
+    setTxs(p => p.map(t => t.id===id ? {...t, needs_review:false, review_status:'reviewed'} : t))
+    const _r = await fetch(`${API_URL}/transactions/${id}`, {
+      method: 'PATCH', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({review_status:'reviewed'})
+    }).catch(() => null)
+    const _d = _r ? await _r.json().catch(() => null) : null
+    if (_d && _d.transaction) {
+      setTxs(p => p.map(t => t.id===id ? {...t, ..._d.transaction} : t))
+    }
   }
 
   const updateNotes = async (id, notes) => {
@@ -156,21 +180,30 @@ export default function Transactions() {
     }).catch(() => {})
   }
 
+  const toggleFixed = async (id, currentIsFixed) => {
+    const next = !currentIsFixed
+    setTxs(p => p.map(t => t.id===id ? {...t, is_fixed: next} : t))
+    await fetch(`${API_URL}/transactions/${id}/fixed`, {
+      method: 'PATCH', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ is_fixed: next })
+    }).catch(() => {})
+  }
+
   const taggedCount = txs.filter(t => t.project_id).length
 
   const S = {
-    page: { padding: '32px 40px 64px', maxWidth: 1300, margin: '0 auto', fontFamily: F, background: '#080b0f', minHeight: '100vh' },
-    card: { background: '#0f1117', border: '1px solid #1e2030', borderRadius: 16 },
-    input: { background: '#0a0d12', border: '1px solid #1e2030', borderRadius: 10, padding: '8px 12px', color: '#e2e8f0', fontSize: 13, outline: 'none', fontFamily: F },
-    select: { background: '#0a0d12', border: '1px solid #1e2030', borderRadius: 10, padding: '8px 12px', color: '#e2e8f0', fontSize: 13, outline: 'none', fontFamily: F, cursor: 'pointer' },
-    th: { padding: '10px 14px', color: '#283244', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', textAlign: 'left', borderBottom: '1px solid #0f1117', whiteSpace: 'nowrap' },
-    td: { padding: '11px 14px', borderBottom: '1px solid #0a0d12', verticalAlign: 'middle' },
-    editInput: { background: '#0a0d12', border: '1px solid #3b82f6', borderRadius: 7, padding: '5px 8px', color: '#fff', fontSize: 12, outline: 'none', fontFamily: F, width: '100%' },
+    page: { padding: '8px 8px 64px', maxWidth: 1400, margin: '0 auto', fontFamily: F, background: '#fafaf5', minHeight: '100vh' },
+    card: { background: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 16 },
+    input: { background: '#ffffff', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: '10px 13px', color: '#1a1a1a', fontSize: 17, outline: 'none', fontFamily: F },
+    select: { background: '#ffffff', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: '9px 13px', color: '#1a1a1a', fontSize: 17, outline: 'none', fontFamily: F, cursor: 'pointer' },
+    th: { padding: '10px 14px', color: '#8a8a85', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', textAlign: 'left', borderBottom: '1px solid rgba(0,0,0,0.08)', whiteSpace: 'nowrap' },
+    td: { padding: '13px 14px', borderBottom: '1px solid rgba(0,0,0,0.05)', verticalAlign: 'middle' },
+    editInput: { background: '#ffffff', border: '1px solid #e85d3c', borderRadius: 7, padding: '6px 9px', color: '#1a1a1a', fontSize: 17, outline: 'none', fontFamily: F, width: '100%' },
   }
 
   if (loading) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'60vh',fontFamily:F}}>
-      <p style={{color:'#475569'}}>Loading transactions…</p>
+      <p style={{color:'#8a8a85'}}>Loading transactions…</p>
     </div>
   )
 
@@ -179,8 +212,8 @@ export default function Transactions() {
       {/* Header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:24 }}>
         <div>
-          <h1 style={{ fontSize:26, fontWeight:800, color:'#f1f5f9', letterSpacing:'-0.5px', marginBottom:6 }}>Transactions</h1>
-          <p style={{ color:'#475569', fontSize:13 }}>
+          <h1 style={{ fontSize:28, fontWeight:800, color:'#1a1a1a', letterSpacing:'-0.5px', marginBottom:6 }}>Transactions</h1>
+          <p style={{ color:'#8a8a85', fontSize:17 }}>
             {filtered.length} of {txs.length} transactions
             {taggedCount > 0 && <span style={{ color:'#8b5cf6', marginLeft:8 }}>· {taggedCount} tagged to projects</span>}
           </p>
@@ -224,11 +257,12 @@ export default function Transactions() {
         <div style={{ overflowX:'auto' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:900 }}>
             <thead>
-              <tr style={{ background:'#0a0d12' }}>
+              <tr style={{ background:'#faf9f5' }}>
                 <th style={S.th}>Date</th>
                 <th style={S.th}>Description</th>
                 <th style={{ ...S.th, textAlign:'right' }}>Amount</th>
                 <th style={S.th}>Category</th>
+                <th style={S.th}>Type</th>
                 <th style={S.th}>Project</th>
                 <th style={S.th}>Account</th>
                 <th style={S.th}>Notes</th>
@@ -245,16 +279,18 @@ export default function Transactions() {
               ) : paginated.map(tx => {
                 const isEditing = editingId === tx.id
                 const isExp = tx.transaction_type === 'expense'
-                const amtColor = tx.amount >= 0 ? '#10b981' : isExp ? '#ef4444' : '#64748b'
+                const _moneyIn = ['income','refund','card_credit'].includes(tx.transaction_type)
+                const _movement = ['credit_card_payment','transfer','loan_payment'].includes(tx.transaction_type)
+                const amtColor = _moneyIn ? '#1d9e75' : _movement ? '#8a8a85' : '#d85a30'
 
                 return (
                   <tr key={tx.id}
                     style={{ borderBottom:'1px solid #0a0d12', transition:'background 0.1s' }}
-                    onMouseEnter={e => e.currentTarget.style.background='#0f1117'}
+                    onMouseEnter={e => e.currentTarget.style.background='rgba(0,0,0,0.02)'}
                     onMouseLeave={e => e.currentTarget.style.background='transparent'}>
 
                     {/* Date */}
-                    <td style={{ ...S.td, color:'#334155', fontSize:12, whiteSpace:'nowrap' }}>
+                    <td style={{ ...S.td, color:'#8a8a85', fontSize:16, whiteSpace:'nowrap' }}>
                       {isEditing
                         ? <input type="date" style={{...S.editInput, width:120}} value={editRow.transaction_date} onChange={e => setEditRow({...editRow, transaction_date:e.target.value})}/>
                         : tx.transaction_date}
@@ -266,10 +302,10 @@ export default function Transactions() {
                         ? <input style={S.editInput} value={editRow.description} onChange={e => setEditRow({...editRow, description:e.target.value})}/>
                         : (
                           <div>
-                            <div style={{ color:'#e2e8f0', fontSize:13, fontWeight:500, marginBottom:2 }}>{tx.description}</div>
+                            <div style={{ color:'#1a1a1a', fontSize:17, fontWeight:500, marginBottom:2 }}>{tx.description}</div>
                             <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                              {tx.is_fixed && <span style={{ fontSize:9, color:'#475569', background:'#151720', padding:'1px 6px', borderRadius:4, fontWeight:600 }}>FIXED</span>}
-                              {tx.needs_review && <span style={{ fontSize:9, color:'#f59e0b', background:'rgba(245,158,11,0.1)', padding:'1px 6px', borderRadius:4 }}>REVIEW</span>}
+                              {tx.needs_review && <span style={{ fontSize:11, color:'#f59e0b', background:'rgba(245,158,11,0.1)', padding:'1px 6px', borderRadius:4 }}>REVIEW</span>}
+                              {tx.needs_review && <button onClick={() => dismissReview(tx.id)} title="Looks good — clear review" style={{ fontSize:11, color:'#10b981', background:'rgba(16,185,129,0.1)', border:'none', padding:'1px 6px', borderRadius:4, cursor:'pointer', marginLeft:4 }}>✓ Looks good</button>}
                               {tx.transaction_type === 'loan_payment' && !tx.is_extra_payment && (
                                 <button onClick={async e => {
                                   e.stopPropagation()
@@ -278,11 +314,11 @@ export default function Transactions() {
                                     body: JSON.stringify({notes: 'extra_payment'})
                                   })
                                   setTxs(p => p.map(t => t.id===tx.id ? {...t, is_extra_payment:true} : t))
-                                }} style={{ fontSize:9, color:'#10b981', background:'rgba(16,185,129,0.08)', border:'1px solid rgba(16,185,129,0.2)', padding:'1px 7px', borderRadius:4, cursor:'pointer', fontFamily:F }}>
+                                }} style={{ fontSize:11, color:'#10b981', background:'rgba(16,185,129,0.08)', border:'1px solid rgba(16,185,129,0.2)', padding:'1px 7px', borderRadius:4, cursor:'pointer', fontFamily:F }}>
                                   Extra payment?
                                 </button>
                               )}
-                              {tx.is_extra_payment && <span style={{ fontSize:9, color:'#10b981', background:'rgba(16,185,129,0.08)', padding:'1px 6px', borderRadius:4 }}>EXTRA PMT</span>}
+                              {tx.is_extra_payment && <span style={{ fontSize:11, color:'#10b981', background:'rgba(16,185,129,0.08)', padding:'1px 6px', borderRadius:4 }}>EXTRA PMT</span>}
                             </div>
                           </div>
                         )}
@@ -293,16 +329,16 @@ export default function Transactions() {
                       {isEditing
                         ? <input type="number" style={{...S.editInput, width:90, textAlign:'right'}} value={editRow.amount} onChange={e => setEditRow({...editRow, amount:e.target.value})}/>
                         : <div style={{ textAlign:'right' }}>
-                            <span style={{ color:amtColor, fontWeight:700, fontSize:14, fontFamily:'monospace' }}>
+                            <span style={{ color:amtColor, fontWeight:700, fontSize:17 }}>
                               {tx.credit_applied > 0 ? '-$'+tx.net_amount.toFixed(2) : fmtAmt(tx.amount)}
                             </span>
                             {tx.credit_applied > 0 && (
-                              <div style={{ fontSize:10, color:'#10b981', marginTop:2 }}>
+                              <div style={{ fontSize:12, color:'#10b981', marginTop:2 }}>
                                 ✓ ${tx.credit_applied.toFixed(2)} credit applied
                               </div>
                             )}
                             {tx.credit_applied > 0 && (
-                              <div style={{ fontSize:10, color:'#475569', textDecoration:'line-through' }}>
+                              <div style={{ fontSize:13, color:'#8a8a85', textDecoration:'line-through' }}>
                                 {fmtAmt(tx.amount)}
                               </div>
                             )}
@@ -317,9 +353,40 @@ export default function Transactions() {
                           </select>
                         : <select value={tx.category||'Other'}
                             onChange={e => updateCategory(tx.id, e.target.value)}
-                            style={{ background:'#151720', border:'1px solid #1e2030', borderRadius:7, padding:'4px 8px', color:'#64748b', fontSize:11, outline:'none', fontFamily:F, cursor:'pointer' }}>
+                            style={{ background:'rgba(0,0,0,0.04)', border:'1px solid rgba(0,0,0,0.1)', borderRadius:7, padding:'6px 10px', color:'#5a5a5a', fontSize:16, outline:'none', fontFamily:F, cursor:'pointer' }}>
                             {allCats.map(c => <option key={c}>{c}</option>)}
                           </select>}
+                    </td>
+
+                    {/* Type — Fixed/Discretionary toggle (expenses only); plain label otherwise */}
+                    <td style={S.td}>
+                      {tx.transaction_type === 'expense' ? (
+                        <button
+                          onClick={e => { e.stopPropagation(); toggleFixed(tx.id, tx.is_fixed) }}
+                          title="Click to toggle Fixed / Discretionary"
+                          style={{
+                            cursor:'pointer', border:'1px solid', borderRadius:7,
+                            padding:'5px 11px', fontSize:15, fontWeight:600, fontFamily:F,
+                            whiteSpace:'nowrap',
+                            background: tx.is_fixed ? 'rgba(71,85,105,0.1)' : 'rgba(99,102,241,0.1)',
+                            borderColor: tx.is_fixed ? 'rgba(71,85,105,0.3)' : 'rgba(99,102,241,0.3)',
+                            color: tx.is_fixed ? '#475569' : '#6366f1',
+                          }}>
+                          {tx.is_fixed ? 'Fixed' : 'Discretionary'}
+                        </button>
+                      ) : (
+                        <span style={{
+                          fontSize:15, color:'#8a8a85', fontWeight:500, whiteSpace:'nowrap',
+                        }}>
+                          {tx.transaction_type === 'refund' ? 'Refund'
+                            : tx.transaction_type === 'card_credit' ? 'Card credit'
+                            : tx.transaction_type === 'credit_card_payment' ? 'Payment'
+                            : tx.transaction_type === 'loan_payment' ? 'Loan payment'
+                            : tx.transaction_type === 'transfer' ? 'Transfer'
+                            : tx.transaction_type === 'income' ? 'Income'
+                            : '—'}
+                        </span>
+                      )}
                     </td>
 
                     {/* Project */}
@@ -330,7 +397,7 @@ export default function Transactions() {
                     </td>
 
                     {/* Account */}
-                    <td style={{ ...S.td, color:'#334155', fontSize:12, whiteSpace:'nowrap' }}>
+                    <td style={{ ...S.td, color:'#8a8a85', fontSize:16, whiteSpace:'nowrap' }}>
                       {tx.bank_source}
                     </td>
 
@@ -340,7 +407,7 @@ export default function Transactions() {
                         ? <input style={S.editInput} placeholder="Note…" value={editRow.notes||''} onChange={e => setEditRow({...editRow, notes:e.target.value})}/>
                         : <input placeholder="Add note…" defaultValue={tx.notes||''}
                             onBlur={e => { if(e.target.value !== (tx.notes||'')) updateNotes(tx.id, e.target.value) }}
-                            style={{ background:'none', border:'none', color:'#334155', fontSize:12, outline:'none', fontFamily:F, width:'100%', cursor:'text' }}/>}
+                            style={{ background:'none', border:'none', color:'#5a5a5a', fontSize:16, outline:'none', fontFamily:F, width:'100%', cursor:'text' }}/>}
                     </td>
 
                     {/* Actions */}
@@ -348,13 +415,13 @@ export default function Transactions() {
                       {isEditing ? (
                         <div style={{ display:'flex', gap:6 }}>
                           <button onClick={() => saveEdit(tx.id)}
-                            style={{ background:'#10b981', color:'#fff', border:'none', borderRadius:7, padding:'5px 12px', fontSize:11, cursor:'pointer', fontWeight:700, fontFamily:F }}>Save</button>
+                            style={{ background:'#2d4a1d', color:'#fff', border:'none', borderRadius:7, padding:'6px 13px', fontSize:15, cursor:'pointer', fontWeight:700, fontFamily:F }}>Save</button>
                           <button onClick={() => setEditingId(null)}
-                            style={{ background:'none', border:'1px solid #1e2030', borderRadius:7, padding:'5px 10px', fontSize:11, cursor:'pointer', color:'#475569', fontFamily:F }}>✕</button>
+                            style={{ background:'none', border:'1px solid rgba(0,0,0,0.12)', borderRadius:7, padding:'6px 11px', fontSize:15, cursor:'pointer', color:'#5a5a5a', fontFamily:F }}>✕</button>
                         </div>
                       ) : (
                         <button onClick={() => { setEditingId(tx.id); setEditRow({ transaction_date:tx.transaction_date||'', description:tx.description||'', amount:tx.amount||0, category:tx.category||'Other', notes:tx.notes||'' }) }}
-                          style={{ background:'none', border:'1px solid #1e2030', borderRadius:7, padding:'4px 10px', fontSize:11, cursor:'pointer', color:'#475569', fontFamily:F }}>
+                          style={{ background:'none', border:'1px solid rgba(0,0,0,0.12)', borderRadius:7, padding:'5px 11px', fontSize:15, cursor:'pointer', color:'#5a5a5a', fontFamily:F }}>
                           Edit
                         </button>
                       )}
@@ -368,21 +435,21 @@ export default function Transactions() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 20px', borderTop:'1px solid #0f1117' }}>
-            <span style={{ color:'#334155', fontSize:12 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 20px', borderTop:'1px solid rgba(0,0,0,0.08)' }}>
+            <span style={{ color:'#8a8a85', fontSize:15 }}>
               {(page-1)*PER_PAGE+1}–{Math.min(page*PER_PAGE, filtered.length)} of {filtered.length}
             </span>
             <div style={{ display:'flex', gap:6 }}>
               <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={page===1}
-                style={{ background:'none', border:'1px solid #1e2030', borderRadius:8, padding:'6px 14px', fontSize:12, cursor:page===1?'not-allowed':'pointer', color:page===1?'#283244':'#64748b', fontFamily:F }}>← Prev</button>
+                style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.12)', borderRadius:8, padding:'7px 15px', fontSize:15, cursor:page===1?'not-allowed':'pointer', color:page===1?'#c4c4c0':'#5a5a5a', fontFamily:F }}>← Prev</button>
               {Array.from({length:Math.min(5,totalPages)},(_,i)=>{
                 let p = page <= 3 ? i+1 : page+i-2
                 if (p > totalPages) return null
                 return <button key={p} onClick={() => setPage(p)}
-                  style={{ background:p===page?'#2563eb':'none', border:`1px solid ${p===page?'#2563eb':'#1e2030'}`, borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', color:p===page?'#fff':'#64748b', fontFamily:F }}>{p}</button>
+                  style={{ background:p===page?'#e85d3c':'#fff', border:`1px solid ${p===page?'#e85d3c':'rgba(0,0,0,0.12)'}`, borderRadius:8, padding:'7px 13px', fontSize:15, cursor:'pointer', color:p===page?'#fff':'#5a5a5a', fontFamily:F }}>{p}</button>
               })}
               <button onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page===totalPages}
-                style={{ background:'none', border:'1px solid #1e2030', borderRadius:8, padding:'6px 14px', fontSize:12, cursor:page===totalPages?'not-allowed':'pointer', color:page===totalPages?'#283244':'#64748b', fontFamily:F }}>Next →</button>
+                style={{ background:'#fff', border:'1px solid rgba(0,0,0,0.12)', borderRadius:8, padding:'7px 15px', fontSize:15, cursor:page===totalPages?'not-allowed':'pointer', color:page===totalPages?'#c4c4c0':'#5a5a5a', fontFamily:F }}>Next →</button>
             </div>
           </div>
         )}

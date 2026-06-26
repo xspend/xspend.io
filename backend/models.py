@@ -71,6 +71,7 @@ class Category(Base):
 class Project(Base):
     __tablename__ = "projects"
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=True)
     name = Column(String(150), nullable=False)
     type = Column(String(30), default="custom")  # savings | debt | custom
     target_amount = Column(Float, nullable=True)
@@ -109,7 +110,7 @@ class Transaction(Base):
     account_name = Column(String, nullable=True)
     transaction_type = Column(String(50), default="unknown")
     category_id = Column(String, nullable=True)
-    category = Column(String, default="Uncategorized")
+    category = Column(String, default="Other")
     subcategory = Column(String, nullable=True)
     notes = Column(String(500), nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
@@ -157,6 +158,16 @@ class BudgetHistory(Base):
     amount     = Column(Float, nullable=False)
     month      = Column(String(7), nullable=False)  # "2026-03"
     created_at = Column(DateTime, default=func.now())
+    user_id    = Column(String, nullable=True)
+
+class ManualFixedExpense(Base):
+    __tablename__ = "manual_fixed_expenses"
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    name       = Column(Text, nullable=False)
+    amount     = Column(Float, nullable=False)
+    frequency  = Column(Text, default="monthly")
+    created_at = Column(Text, server_default=func.now())
+    user_id    = Column(String, nullable=True)
 
 def seed_default_categories(db):
     if db.query(Category).filter(Category.is_system_default == True).count() > 0:
@@ -170,13 +181,13 @@ def seed_default_categories(db):
         ("Travel","expense"),("Personal Care","expense"),
         ("Pets","expense"),("Education","expense"),
         # Added — match classifier emissions (29 canonical categories total)
-        ("Alcohol & Liquor","expense"),("Baby & Kids","expense"),
+        ("Baby & Kids","expense"),
         ("Bank Fees","expense"),("Cash & ATM","expense"),
         ("Gifts & Donations","expense"),("Government & Taxes","expense"),
         ("Home Improvement","expense"),("Insurance","expense"),
         ("Professional Services","expense"),
         # Income / transfers / payments / misc
-        ("Salary","income"),("Other Income","income"),
+        ("Salary","income"),
         ("Transfer","transfer"),("Credit Card Payment","transfer"),
         ("Card Credit","transfer"),
         ("Loan Payment","debt"),

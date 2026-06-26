@@ -18,20 +18,12 @@ const FAQ_ITEMS = [
     a: "Mint and similar apps are built around budgeting — they want you to set targets and meet them. xspend is built around awareness — we show you what's happening and trust you to decide what to do. We don't sell data, show ads, or moralize."
   },
   {
-    q: 'Is my data secure?',
-    a: 'We use Plaid for bank connections — the same provider behind Venmo, Coinbase, and Robinhood. Your bank credentials are never shared with us. You can also upload statements directly to skip bank linking entirely.'
-  },
-  {
     q: 'Do you move my money?',
     a: 'No. xspend is read-only. We can see your transactions to categorize and analyze them, but we cannot transfer money, change account settings, or initiate any movement.'
   },
   {
     q: 'Can I delete my data?',
     a: "Yes, anytime. Your account is immediately deactivated and all data is hard-deleted within 30 days. We don't retain anything after deletion."
-  },
-  {
-    q: 'What banks are supported?',
-    a: "Through Plaid, 12,000+ US banks and credit unions. For banks not on the list — or if you'd rather not link — you can upload statements (CSV, Excel, PDF, OFX). Tested formats include Chase, Amex, Bank of America, Wells Fargo, Capital One, Discover."
   },
 ]
 
@@ -95,9 +87,9 @@ function FeatureCategoryPreview() {
           alignItems: 'center',
           gap: 10,
           padding: '6px 0',
-          fontSize: 12,
+          fontSize: 14,
         }}>
-          <span style={{ width: 18, fontSize: 14 }}>{r.emoji}</span>
+          <span style={{ width: 18, fontSize: 16 }}>{r.emoji}</span>
           <span style={{ flex: 1, color: C.text }}>{r.name}</span>
           <span style={{
             color: C.text,
@@ -122,7 +114,7 @@ function FeatureCategoryPreview() {
           </div>
           <span style={{
             color: C.textHint,
-            fontSize: 11,
+            fontSize: 13,
             minWidth: 28,
             textAlign: 'right',
             opacity: inView ? 1 : 0,
@@ -211,8 +203,8 @@ function FeatureInsightsPreview() {
           transform: inView ? 'translateY(0)' : 'translateY(6px)',
           transition: `opacity 400ms ease ${i * 300}ms, transform 400ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 300}ms`,
         }}>
-          <span style={{ fontSize: 13, flexShrink: 0 }}>{ins.emoji}</span>
-          <span style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{ins.text}</span>
+          <span style={{ fontSize: 15, flexShrink: 0 }}>{ins.emoji}</span>
+          <span style={{ fontSize: 14, color: C.text, lineHeight: 1.5 }}>{ins.text}</span>
         </div>
       ))}
     </div>
@@ -228,16 +220,16 @@ function FeatureCard({ icon, title, tagline, body, children }) {
       borderRadius: 14,
     }}>
       <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
-        <span style={{ fontSize: 26, lineHeight: 1.2, flexShrink: 0 }}>{icon}</span>
+        <span style={{ fontSize: 28, lineHeight: 1.2, flexShrink: 0 }}>{icon}</span>
         <div style={{ flex: 1 }}>
           <h3 style={{
-            fontSize: 16,
+            fontSize: 18,
             fontWeight: 500,
             color: C.text,
             margin: '0 0 4px',
           }}>{title}</h3>
           <p style={{
-            fontSize: 13,
+            fontSize: 15,
             color: C.textHint,
             margin: 0,
           }}>{tagline}</p>
@@ -245,7 +237,7 @@ function FeatureCard({ icon, title, tagline, body, children }) {
       </div>
       {children}
       <p style={{
-        fontSize: 14,
+        fontSize: 16,
         color: C.textMuted,
         margin: '0 0 0 44px',
         lineHeight: 1.6,
@@ -299,13 +291,13 @@ export default function Landing() {
           </span>
           <span style={{
             fontWeight: 500,
-            fontSize: 18,
+            fontSize: 20,
             color: C.text,
             letterSpacing: 1.8,
           }}>XSPEND</span>
         </div>
 
-        <div style={{ display: 'flex', gap: 32, fontSize: 14, color: C.textMuted }}>
+        <div style={{ display: 'flex', gap: 32, fontSize: 16, color: C.textMuted }}>
           <button onClick={() => scrollTo('features')} style={navLinkStyle}>Features</button>
           <button onClick={() => scrollTo('how-it-works')} style={navLinkStyle}>How it works</button>
           <button onClick={() => scrollTo('contact-faq')} style={navLinkStyle}>Contact & FAQ</button>
@@ -320,7 +312,7 @@ export default function Landing() {
         margin: '0 auto',
       }}>
         <h1 style={{
-          fontSize: 52,
+          fontSize: 54,
           fontWeight: 500,
           lineHeight: 1.1,
           color: C.text,
@@ -330,7 +322,7 @@ export default function Landing() {
           See every dollar.<br/>Understand where it went.
         </h1>
         <p style={{
-          fontSize: 16,
+          fontSize: 18,
           color: C.textMuted,
           lineHeight: 1.6,
           maxWidth: 480,
@@ -346,7 +338,7 @@ export default function Landing() {
             border: 'none',
             borderRadius: 10,
             padding: '14px 36px',
-            fontSize: 15,
+            fontSize: 17,
             fontWeight: 500,
             textDecoration: 'none',
             fontFamily: 'inherit',
@@ -355,7 +347,7 @@ export default function Landing() {
             Get started — it's free
           </Link>
           <Link to="/login" style={{
-            fontSize: 14,
+            fontSize: 16,
             color: C.textMuted,
             textDecoration: 'none',
             fontFamily: 'inherit',
@@ -372,12 +364,12 @@ export default function Landing() {
           borderRadius: 10,
           padding: '12px 18px',
           marginTop: 40,
-          fontSize: 13,
+          fontSize: 15,
           color: C.trustText,
           maxWidth: 460,
           lineHeight: 1.5,
         }}>
-          <span style={{ color: C.trustIcon, flexShrink: 0, fontSize: 14 }}>✓</span>
+          <span style={{ color: C.trustIcon, flexShrink: 0, fontSize: 16 }}>✓</span>
           <span><span style={{ fontWeight: 500 }}>Bank-grade encryption.</span> Read-only access. We never move your money.</span>
         </div>
 
@@ -389,7 +381,7 @@ export default function Landing() {
             cursor: 'pointer',
             marginTop: 56,
             color: C.textHint,
-            fontSize: 12,
+            fontSize: 14,
             letterSpacing: 1,
             fontFamily: 'inherit',
             padding: 8,
@@ -397,21 +389,22 @@ export default function Landing() {
             margin: '56px auto 0',
           }}
         >
-          <div style={{ fontSize: 20, lineHeight: 1, marginBottom: 6 }}>↓</div>
+          <div style={{ fontSize: 22, lineHeight: 1, marginBottom: 6 }}>↓</div>
           See more
         </button>
       </section>
 
       {/* FEATURES */}
+      <style>{`@media (max-width: 760px){ .features-grid{ grid-template-columns: 1fr !important; } }`}</style>
       <section id="features" style={{
         padding: '80px 32px 60px',
-        maxWidth: 720,
+        maxWidth: 1080,
         margin: '0 auto',
         borderTop: `0.5px solid ${C.borderSoft}`,
         scrollMarginTop: 80,
       }}>
         <p style={{
-          fontSize: 15,
+          fontSize: 17,
           color: C.textMuted,
           textAlign: 'center',
           margin: '0 0 44px',
@@ -423,7 +416,7 @@ export default function Landing() {
         <div style={eyebrowStyle}>Features</div>
         <h2 style={sectionHeadingStyle}>What xspend gives you</h2>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="features-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20, alignItems: 'stretch' }}>
           <FeatureCard
             icon="🔍"
             title="See where your money actually goes"
@@ -456,6 +449,13 @@ export default function Landing() {
               <FeatureInsightsPreview />
             </div>
           </FeatureCard>
+
+          <FeatureCard
+            icon="🎯"
+            title="Track spending around what matters"
+            tagline="Projects, your way."
+            body="Group spending around a trip, a renovation, a move, or any goal. Tag transactions to a project and watch the total add up automatically — see exactly what something really cost."
+          />
         </div>
       </section>
 
@@ -473,7 +473,7 @@ export default function Landing() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
           {[
             { n: 1, title: 'Create your account', body: 'Email and password. No credit card needed.' },
-            { n: 2, title: 'Link your bank or upload statements', body: 'Securely connect your bank (Plaid-secured) or upload statements directly — whichever you prefer. Both work just as well.' },
+            { n: 2, title: 'Upload your statements', body: 'Export from your bank as CSV, Excel, PDF, or OFX and upload — we handle the parsing. Tested with Chase, Amex, Bank of America, Wells Fargo, and more.' },
             { n: 3, title: 'See your spending, clearly', body: 'Spending organized by category, fixed vs flexible separated, patterns surfaced — without budgets or judgment.' },
           ].map(s => (
             <div key={s.n} style={{ display: 'flex', gap: 20 }}>
@@ -487,7 +487,7 @@ export default function Landing() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: 500,
               }}>
                 {s.n}
@@ -530,7 +530,7 @@ export default function Landing() {
                     padding: 0,
                     cursor: 'pointer',
                     fontFamily: 'inherit',
-                    fontSize: 15,
+                    fontSize: 17,
                     fontWeight: 500,
                     color: C.text,
                     display: 'flex',
@@ -542,7 +542,7 @@ export default function Landing() {
                   <span>{item.q}</span>
                   <span style={{
                     color: C.textHint,
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: 400,
                     transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)',
                     transition: 'transform 0.2s',
@@ -550,7 +550,7 @@ export default function Landing() {
                 </button>
                 {isOpen && (
                   <p style={{
-                    fontSize: 14,
+                    fontSize: 16,
                     color: C.textMuted,
                     margin: '12px 0 4px',
                     lineHeight: 1.65,
@@ -567,16 +567,16 @@ export default function Landing() {
           marginTop: 36,
           paddingTop: 24,
           borderTop: `0.5px solid ${C.borderSoft}`,
-          fontSize: 14,
+          fontSize: 16,
           color: C.textMuted,
         }}>
           Still have questions?{' '}
-          <a href="mailto:support@xspend.io" style={{
+          <a href="mailto:xspend.io@gmail.com" style={{
             color: C.text,
             textDecoration: 'underline',
             textUnderlineOffset: 3,
           }}>
-            support@xspend.io
+            xspend.io@gmail.com
           </a>
         </div>
       </section>
@@ -585,7 +585,7 @@ export default function Landing() {
         padding: '32px',
         borderTop: `0.5px solid ${C.borderSoft}`,
         textAlign: 'center',
-        fontSize: 12,
+        fontSize: 14,
         color: C.textHint,
       }}>
         © {new Date().getFullYear()} xspend
@@ -599,7 +599,7 @@ const navLinkStyle = {
   background: 'none',
   border: 'none',
   color: 'inherit',
-  fontSize: 14,
+  fontSize: 16,
   fontWeight: 400,
   cursor: 'pointer',
   padding: 0,
@@ -607,7 +607,7 @@ const navLinkStyle = {
 }
 
 const eyebrowStyle = {
-  fontSize: 11,
+  fontSize: 13,
   color: '#8a8a85',
   letterSpacing: 1.5,
   textTransform: 'uppercase',
@@ -616,7 +616,7 @@ const eyebrowStyle = {
 }
 
 const sectionHeadingStyle = {
-  fontSize: 28,
+  fontSize: 30,
   fontWeight: 500,
   color: '#1a1a1a',
   margin: '0 0 32px',
@@ -624,14 +624,14 @@ const sectionHeadingStyle = {
 }
 
 const cardTitleStyle = {
-  fontSize: 16,
+  fontSize: 18,
   fontWeight: 500,
   color: '#1a1a1a',
   margin: '0 0 8px',
 }
 
 const cardBodyStyle = {
-  fontSize: 14,
+  fontSize: 16,
   color: '#5a5a5a',
   margin: 0,
   lineHeight: 1.6,
@@ -649,7 +649,7 @@ const previewWrapperStyle = {
 }
 
 const splitLabelStyle = {
-  fontSize: 10,
+  fontSize: 12,
   color: '#8a8a85',
   textTransform: 'uppercase',
   letterSpacing: 1,
@@ -659,11 +659,11 @@ const splitLabelStyle = {
 const splitAmountStyle = {
   fontFamily: 'ui-monospace, monospace',
   color: '#1a1a1a',
-  fontSize: 16,
+  fontSize: 18,
   fontWeight: 500,
 }
 
 const splitSublineStyle = {
-  fontSize: 11,
+  fontSize: 13,
   color: '#8a8a85',
 }

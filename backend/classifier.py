@@ -29,6 +29,12 @@ PRE_NORM_ALIASES = {
     'raz*chirukaanuka': 'indigo airlines',
     'clear*clearme': 'clearme subscription',
     'apple *': 'apple subscription',
+    'uber *eats': 'uber eats',
+    'uber* eats': 'uber eats',
+    'ubereats': 'uber eats',
+    'uber eats': 'uber eats',
+    'in-n-out': 'innout burger',
+    'in n out': 'innout burger',
 }
 
 MERCHANT_ALIASES = {
@@ -115,6 +121,13 @@ STRIP_PATTERNS = [
 
 COMPILED_STRIP = [re.compile(p, re.IGNORECASE) for p in STRIP_PATTERNS]
 
+# Payment-processor wrappers that prefix the REAL merchant name (e.g. "SQ *BIRYANI BISTRO").
+# These must be stripped BEFORE the generic "*word" auth-code pattern, otherwise the
+# merchant's first word gets deleted. Captures everything after the prefix.
+PROCESSOR_PREFIX_RE = re.compile(
+    r'^(?:sq|tst|toast|dd|dsh|paypal|pp|sp|clkbank|wpy|gum|fs|ven(?:mo)?)\s*\*+\s*',
+    re.IGNORECASE)
+
 # Summary/junk row indicators
 SUMMARY_KEYWORDS = [
     'opening balance', 'closing balance', 'statement balance',
@@ -150,18 +163,22 @@ CC_PAYMENT_RE = re.compile(
      r'capital.?one.?des.?payment)\b', re.IGNORECASE)
 
 CC_PAYMENT_RE = re.compile(
-    r'\b(payment.?thank.?you|thank.?you.?payment|autopay|auto.?pay|'
+    r'\b(automatic.?payment|payment.?thank.?you|thank.?you.?payment|autopay|auto.?pay|'
      r'online.?payment|mobile.?payment|payment.?received|'
      r'minimum.?payment|cc.?payment|credit.?card.?payment|'
      r'amex.?payment|chase.?payment|citi.?payment|discover.?payment|'
      r'bofa.?payment|bank.?of.?america.?payment|apple.?card.?payment|'
-     r'capital.?one.?payment)\b', re.IGNORECASE)
+     r'capital.?one.?payment|'
+     r'american.?express.*\bpmt\b|amex.*\bpmt\b|'
+     r'chase.?credit.?crd|chase.?crd.*epay|'
+     r'applecard|gsbank.*payment|'
+     r'discover.*\bpmt\b|citi.*\bpmt\b|capital.?one.*\bpmt\b)\b', re.IGNORECASE)
 
 # Loan/mortgage
 LOAN_RE = re.compile(
     r'\b(mortgage|mtg.?pymt|mtg.?payment|home.?loan|auto.?loan|'
      r'car.?loan|student.?loan|personal.?loan|loan.?payment|'
-     r'bmw.?financial|ally.?financial|honda.?financial|toyota.?financial|'
+     r'bmw.?financial|bmw.?bank|bmwfs|ally.?financial|honda.?financial|toyota.?financial|'
      r'ford.?credit|gm.?financial|nissan.?motor|hyundai.?finance|'
      r'lakeview|quicken.?loan|rocket.?mortgage|nationstar|'
      r'mr.?cooper|freedom.?mortgage|pennymac|loandepot|'
@@ -188,7 +205,7 @@ REFUND_RE = re.compile(
 TRANSFER_RE = re.compile(
     r'\b(zelle|venmo|cash.?app|apple.?cash|google.?pay.?send|'
      r'wire.?transfer|internal.?transfer|account.?transfer|'
-     r'transfer.?to|transfer.?from|xoom|western.?union|moneygram|'
+     r'transfer.?to|transfer.?from|trnsfr|ext.?trnsfr|xoom|western.?union|moneygram|'
      r'wise|remitly|worldremit|paypal.?transfer|fb.?pay)\b',
     re.IGNORECASE)
 
@@ -244,7 +261,13 @@ RAW_CATEGORY_PATTERNS = [
     (r'\b(latte|espresso|cappuccino|americano|matcha|chai)\b', 3, 'Food & Dining'),
     (r'ubereats|uber.?eats|doordash|grubhub|postmates|seamless|caviar|gopuff', 4, 'Food & Dining'),
     (r'tst\s*\*|sq\s*\*.*(?:cafe|coffee|pizza|burger|grill|kitchen|bar|brew)', 3, 'Food & Dining'),
+    (r'\b(innout|in.?n.?out|qdoba|chipotle|panera|five.?guys|whataburger|'
+     r'culvers|wendys|arbys|jack.?in.?the.?box|del.?taco|el.?pollo)\b', 4, 'Food & Dining'),
     (r'\b(food|eats|dining|menufy)\b', 2, 'Food & Dining'),
+    (r'\b(chaat|munchen|tacos?|taqueria|gastropub|lanai|akamai|the.?buoy|'
+     r'sugar.?momma|sweets|dessert|ice.?cream|creamery|bakery|deli|bistro|eatery)\b', 3, 'Food & Dining'),
+    (r'\b(salt.?&?.?straw|molly.?moon|kream|cold.?stone|baskin|'
+     r'ben.?&?.?jerry|haagen|creamery|gelato|frozen.?yogurt|froyo)\b', 4, 'Food & Dining'),
 
     # ── Groceries ──
     (r'\b(safeway|kroger|whole.?foods|trader.?joe|aldi|publix|sprouts|'
@@ -258,6 +281,8 @@ RAW_CATEGORY_PATTERNS = [
     (r'\b(mayuri.?foods|mayuri.?video|indian.?grocery|mayuri.?market|'
      r'ethnic.?grocery|international.?market|global.?food|'
      r'asian.?market|halal.?grocery|indian.?store)\b', 3, 'Groceries'),
+    (r'\b(central.?market|ctrl.?mkt|ctrl.?market|town.?country.?market|'
+     r'metropolitan.?market|uwajimaya|h.?mart|99.?ranch|mitsuwa)\b', 4, 'Groceries'),
 
     # ── Transport ──
     (r'\b(lyft|curb|taxi|cab|rideshare|ride.?share)\b', 4, 'Transport'),
@@ -273,6 +298,8 @@ RAW_CATEGORY_PATTERNS = [
      r'greyhound|megabus|good2go)\b', 4, 'Transport'),
     (r'\b(jiffy.?lube|midas|pep.?boys|autozone|oreilly|napa|mavis|'
      r'firestone|discount.?tire|goodyear)\b', 3, 'Transport'),
+    (r'\b(gull.?energy|conoco|phillips.?66|sinclair|valero|mini.?mart|'
+     r'car.?wash|brown.?bear|quick.?stop|gas.?n.?go)\b', 3, 'Transport'),
     (r'\b(fuel|gas.?station|petrol|parking|toll)\b', 2, 'Transport'),
 
     # ── Bills & Utilities ──
@@ -341,12 +368,17 @@ RAW_CATEGORY_PATTERNS = [
     (r'\b(best.?buy|apple.?store|micro.?center|adorama|newegg|gamestop)\b', 4, 'Shopping'),
     (r'\b(gap|zara|h.?m|uniqlo|forever.?21|old.?navy|banana.?republic|'
      r'jcrew|madewell|anthropologie|asos|abercrombie|ae\b|express)\b', 4, 'Shopping'),
+    (r'\b(loft\b|ann.?taylor|boutique|clothing.?co|apparel|outfitters)\b', 3, 'Shopping'),
+    (r'\b(ralph.?lauren|polo.?ralph|tommy.?hilfiger|calvin.?klein|lacoste|'
+     r'brooks.?brothers|nautica|vineyard.?vines|lululemon|patagonia.?store)\b', 4, 'Shopping'),
     (r'\b(nike|adidas|lululemon|athleta|under.?armour|reebok|new.?balance|dyson|'
      r'glow.?cosmetics|pop.?mart)\b', 4, 'Shopping'),
     (r'\b(crate.?barrel|williams.?sonoma|pottery.?barn|west.?elm|'
      r'ikea|homegoods|bed.?bath)\b', 4, 'Shopping'),
     (r'\b(sephora|ulta|bath.?body|the.?body.?shop)\b', 4, 'Shopping'),
     (r'\b(sams.?club|bjs.?wholesale|staples|office.?depot|officemax|road.?runner|running.?warehouse|fleet.?feet)\b', 3, 'Shopping'),
+    (r'\b(sporting.?goods|big.?5|rei\b|dicks.?sporting|academy.?sports|'
+     r'sports.?authority|cabelas|bass.?pro|dunhams|hibbett)\b', 4, 'Shopping'),
     (r'\bamzn\b|amazon.?mktp|amazon.?mktpl', 3, 'Shopping'),
     (r'\b(pret|marks.?spencer|boots.?pharmacy|tesco|sainsbury|waitrose|'
      r'carrefour|lulu.?hypermarket|noon|namshi|centrepoint)\b', 3, 'Shopping'),
@@ -356,7 +388,9 @@ RAW_CATEGORY_PATTERNS = [
     (r'\b(amusement|bowling|golf|arcade|escape.?room|laser.?tag|'
      r'trampoline|top.?golf|mini.?golf)\b', 4, 'Entertainment'),
     (r'\b(steam|playstation|xbox|nintendo|twitch|gaming|epic.?games)\b', 4, 'Entertainment'),
-    (r'\b(movie|cinema|theater|theatre|concert)\b', 3, 'Entertainment'),
+    (r'\b(cinemark|amc|regal|cinepolis|alamo.?drafthouse|landmark.?theat|'
+     r'showcase.?cinema|marcus.?theat|harkins|bow.?tie.?cinema)\b', 4, 'Entertainment'),
+    (r'\b(movie|cinema|cinemas|theater|theatre|concert|imax|multiplex)\b', 3, 'Entertainment'),
 
     # ── Travel ──
     (r'\b(delta|united|american.?airlines|southwest|spirit.?airlines|indigo|indigoairlines|raz.?indigo|raz.?chirukaanuka|air.?india|vistara|spicejet|goair|akasa)\b', 4, 'Travel'),
@@ -377,6 +411,8 @@ RAW_CATEGORY_PATTERNS = [
     # ── Personal Care ──
     (r'\b(hair.?bar|hair.?studio|hair.?lounge|blow.?dry|blowout.?bar|'
      r'bond.?hair|great.?clips|sport.?clips|supercuts|fantastic.?sams)\b', 5, 'Personal Care'),
+    (r'\b(eyebrow|eye.?brow|threading|brow.?bar|brow.?studio|lash|'
+     r'microblading|henna.?brow)\b', 5, 'Personal Care'),
     (r'\b(salon|spa|barber|haircut|nail.?salon|nail.?bar|beauty|'
      r'skincare|cosmetic|massage|waxing|esthetician|beauty.?supply)\b', 4, 'Personal Care'),
 
@@ -390,7 +426,8 @@ RAW_CATEGORY_PATTERNS = [
 
     # ── Pets ──
     (r'\b(petsmart|petco|pet.?supplies.?plus|tractor.?supply|chewy|'
-     r'rover|wag)\b', 5, 'Pets'),
+     r'rover|wag|pet.?evolution|pet.?supermarket|pet.?valu|spot.?pet|paw.?print|grooming|'
+     r'pet.?food.?express)\b', 5, 'Pets'),
     (r'\b(veterinary|veterinarian|animal.?hospital|vet.?clinic|'
      r'pet.?grooming|dog.?walk|pet.?board|pet.?sit|spot.?pet)\b', 4, 'Pets'),
     (r'\b(pet.?food|dog.?food|cat.?food|pet.?supply)\b', 3, 'Pets'),
@@ -410,9 +447,6 @@ RAW_CATEGORY_PATTERNS = [
      r'montessori|kindercare|bright.?horizons)\b', 5, 'Baby & Kids'),
     (r'\b(diapers|formula|stroller|crib|nursery|pampers|huggies)\b', 4, 'Baby & Kids'),
 
-    # ── Alcohol & Liquor ──
-    (r'\b(total.?wine|bevmo|liquor|spirits|wine.?shop|bottle.?shop|'
-     r'wine.?store)\b', 4, 'Alcohol & Liquor'),
 
     # ── Education ──
     (r'\b(tuition|university|college|school|course|udemy|coursera|'
@@ -422,11 +456,11 @@ RAW_CATEGORY_PATTERNS = [
 
     # ── Rent / Housing ──
     (r'\b(rent|lease|apt|apartment|property.?management|realty|'
-     r'hoa|condo.?assoc|homeowner.?assoc|housing|landlord)\b', 5, 'Bills & Utilities'),
+     r'hoa|condo.?assoc|homeowner.?assoc|housing|landlord)\b', 5, 'Rent/Mortgage'),
     (r'\b(mortgage|mtg|lakeview|quicken.?loan|rocket.?mortgage|nationstar|'
      r'mr.?cooper|freedom.?mortgage|pennymac|loandepot|'
-     r'caliber.?home|united.?wholesale|guild.?mortgage)\b', 5, 'Bills & Utilities'),
-    (r'\bfs.?pay.?hoa\b|\bhoa.?payment\b|\bhomeowner.?dues\b', 5, 'Bills & Utilities'),
+     r'caliber.?home|united.?wholesale|guild.?mortgage)\b', 5, 'Rent/Mortgage'),
+    (r'\bfs.?pay.?hoa\b|\bhoa.?payment\b|\bhomeowner.?dues\b', 5, 'Rent/Mortgage'),
 
     # ── Government / Taxes ──
     (r'\b(irs|tax.?payment|property.?tax|state.?tax|franchise.?tax|'
@@ -451,6 +485,8 @@ RAW_CATEGORY_PATTERNS = [
     (r'\b(openai|figma|notion|slack|github|linear|vercel|heroku|aws|'
      r'digitalocean|atlassian|jira|hubspot|salesforce|intercom|'
      r'stripe|twilio|sendgrid|cloudflare)\b', 3, 'Subscriptions'),
+    (r'\b(monarch.?money|ynab|mint|copilot.?money|rocket.?money|truebill|'
+     r'personal.?capital|empower.?personal)\b', 4, 'Subscriptions'),
 ]
 
 # Precompile all category patterns
@@ -472,6 +508,14 @@ def normalize_description(desc: str) -> str:
     if not desc:
         return ''
     d = desc.lower().strip()
+    # Strip payment-processor prefix FIRST (SQ *, TST*, DD *, PAYPAL *, …) so the
+    # generic "*word" auth-code stripper below doesn't eat the merchant's first word.
+    d = PROCESSOR_PREFIX_RE.sub('', d)
+    # Split mashed merchant+number so word boundaries work across formats
+    # (e.g. QFX memo 'firestone28258' -> 'firestone 28258'). Only splits a letter
+    # run directly followed by a digit run; leaves normal alphanumerics alone.
+    d = re.sub(r'([a-z])(\d)', r'\1 \2', d)
+    d = re.sub(r'(\d)([a-z])', r'\1 \2', d)
     # Apply pre-normalization aliases BEFORE stripping symbols
     for alias, replacement in PRE_NORM_ALIASES.items():
         if alias in d:
@@ -553,6 +597,11 @@ def classify_transaction_type(
     # CC Payments
     if CC_PAYMENT_RE.search(normalized):
         return 'credit_card_payment', None
+
+    # P2P transfers (Zelle/Venmo/etc.) — check BEFORE loan so a memo like
+    # 'zelle ... mortgage' types as transfer (it's person-to-person), not loan.
+    if re.search(r'\b(zelle|venmo|cash.?app|apple.?cash)\b', normalized):
+        return 'transfer', None
 
     # Loan/mortgage payments
     if LOAN_RE.search(normalized):
@@ -777,9 +826,10 @@ def emit_recurring_hint(category: str, merchant: str) -> bool:
     return category in RECURRING_HINT_CATEGORIES
 
 
-def generate_fingerprint(bank: str, date: str, amount: float, description: str, ext_id: str = "") -> str:
-    id_part = f"|\{ext_id}" if ext_id else ""
-    raw = f"{bank}|{date}|{round(float(amount),2)}|{description[:60].lower()}{id_part}"
+def generate_fingerprint(bank: str, date: str, amount: float, description: str, ext_id: str = "", account: str = "") -> str:
+    id_part = f"|{ext_id}" if ext_id else ""
+    acct_part = f"|{account}" if account else ""
+    raw = f"{bank}{acct_part}|{date}|{round(float(amount),2)}|{description[:60].lower()}{id_part}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
@@ -878,11 +928,32 @@ def classify_with_meta(
     # ── Step 5: Classify transaction type ──
     tx_type, type_review_reason = classify_transaction_type(normalized, merchant, amt, bank)
 
+    # Cash withdrawals count as spending (cash out = intent to spend). Retype to
+    # 'expense' so spend calculations include it, but force 'Cash & ATM' category.
+    _force_cash_category = False
+    if tx_type == 'cash':
+        tx_type = 'expense'
+        _force_cash_category = True
+
+    # Loan/mortgage payments count as FIXED spending (housing/car/loans are real
+    # monthly outflows). Retype to 'expense' and route the category by keyword.
+    # mortgage/rent/HOA -> Rent/Mortgage ; everything else -> Loan Payment.
+    # (Both are in FIXED_CATEGORIES, so fixed_classifier marks them fixed.)
+    _force_loan_category = None
+    if tx_type == 'loan_payment':
+        tx_type = 'expense'
+        if re.search(r'\b(mortgage|mtg|rent|lease|hoa|home.?loan|escrow|'
+                     r'lakeview|rocket.?mortgage|nationstar|mr.?cooper|pennymac|'
+                     r'loandepot|freedom.?mortgage|quicken.?loan)\b', normalized):
+            _force_loan_category = 'Rent/Mortgage'
+        else:
+            _force_loan_category = 'Loan Payment'
+
     # Non-expense types — return immediately
     if tx_type != 'expense':
         # Determine category for non-expenses
         if tx_type == 'income':
-            category = 'Salary' if re.search(r'\b(payroll|salary|wages|stripe|adp|paychex|gusto)\b', normalized) else 'Other Income'
+            category = 'Salary' if re.search(r'\b(payroll|salary|wages|stripe|adp|paychex|gusto)\b', normalized) else 'Other'
         elif tx_type == 'loan_payment':
             category = 'Loan Payment'
         elif tx_type == 'credit_card_payment':
@@ -906,6 +977,16 @@ def classify_with_meta(
         needs_review = type_review_reason is not None
         confidence = 'low' if needs_review else 'high'
         return (tx_type, category, confidence, needs_review), meta
+
+    # Cash withdrawal: force Cash & ATM category, skip merchant scoring.
+    if _force_cash_category:
+        meta['recurring_hint'] = False
+        return ('expense', 'Cash & ATM', 'high', False), meta
+
+    # Loan/mortgage payment: force its routed category (fixed), skip merchant scoring.
+    if _force_loan_category:
+        meta['recurring_hint'] = True
+        return ('expense', _force_loan_category, 'high', False), meta
 
     # ── Step 6: Score categories (expense only) ──
     scores = score_categories(normalized, merchant)
@@ -937,7 +1018,7 @@ def classify_with_meta(
 def should_exclude_from_spending(transaction_type: str) -> bool:
     """Returns True if transaction should be excluded from spend calculations."""
     return transaction_type in {
-        'income', 'transfer', 'credit_card_payment', 'loan_payment',
+        'income', 'transfer', 'credit_card_payment',
         'card_credit', 'refund', 'excluded', 'reimbursement', 'cash'
     }
 
