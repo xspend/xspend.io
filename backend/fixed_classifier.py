@@ -157,6 +157,10 @@ def display_merchant(description: str) -> str:
     d = re.sub(r'\b[A-Z0-9]*\*[A-Z0-9]+', '', d)         # *XYZ123 or PREFIX*XYZ123
     d = re.sub(r'#\d+', '', d)                            # #0106 location codes
     d = re.sub(r'\b\d{6,}\b', '', d)                    # 6+ digit references
+    # Phone numbers: (877)263 9300, 877-263-9300, 1-800-..., etc. Strip an
+    # optional leading country-code 1, then the 3-3-4 phone shape.
+    d = re.sub(r'\b1[\s.\-]?(?=\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})', '', d)
+    d = re.sub(r'\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}', '', d)
     # High-entropy alphanumeric codes (Airbnb 'Hme2z9qj9n', Amazon 'Dy3g80Sk3'): 6+ char
     # tokens with >=3 letter<->digit transitions. Word+number names like 'forever21' or
     # '7eleven' have only 1 transition and are preserved.
