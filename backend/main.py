@@ -268,7 +268,6 @@ async def upload_statement(
     current_user: str = Depends(get_current_user)
 ):
     contents = await file.read()
-    print(f"UPLOAD HANDLER FIRED: {file.filename} at {__import__("datetime").datetime.now()}")
     print(f"UPLOAD: {file.filename} size={len(contents)} bank={bank_name}")
 
     # Parse an account label from the filename so multiple accounts at the same
@@ -717,7 +716,14 @@ def update_transaction(tid: int, update: TransactionUpdate, db: Session = Depend
             all_txs = db.execute(_sa.text(
                 "SELECT transaction_id, description, category, amount, transaction_type, transaction_date FROM transactions WHERE transaction_type = 'expense' AND amount < 0 AND user_id = :u"
             ), {'u': current_user}).fetchall()
-            all_txs_list = [dict(r._mapping) for r in all_txs]
+            # Postgres returns DATE as date objects; classifier does string ops
+            # (date[:7], .split) so stringify transaction_date.
+            all_txs_list = []
+            for r in all_txs:
+                d = dict(r._mapping)
+                if d.get('transaction_date') is not None:
+                    d['transaction_date'] = str(d['transaction_date'])
+                all_txs_list.append(d)
             result = classify_transaction(tx_dict, all_txs_list)
             db.execute(_sa.text(
                 "UPDATE transactions SET is_fixed=:f, fixed_confidence=:c, fixed_source=:s WHERE id=:id AND user_id=:u"

@@ -38,8 +38,12 @@ function filterPeriod(txs, period, months, customStart, customEnd) {
   if (period === 'latest') { const m = months[months.length-1]; return txs.filter(t => t.transaction_date?.startsWith(m)) }
   if (period === '3m') { const last3 = months.slice(-3); return txs.filter(t => last3.some(m => t.transaction_date?.startsWith(m))) }
   if (period === 'custom' && customStart && customEnd) {
-    const s = new Date(customStart), e = new Date(customEnd)
-    return txs.filter(t => { if(!t.transaction_date) return false; const d = new Date(t.transaction_date); return d >= s && d <= e })
+    // Compare as ISO date strings (YYYY-MM-DD sorts correctly lexically).
+    // Avoids new Date() timezone shifts that dropped boundary days / whole ranges.
+    return txs.filter(t => {
+      const d = (t.transaction_date || '').slice(0, 10)
+      return d && d >= customStart && d <= customEnd
+    })
   }
   if (period?.match(/^\d{4}-\d{2}$/)) return txs.filter(t => t.transaction_date?.startsWith(period))
   return txs
@@ -572,15 +576,7 @@ export default function Dashboard() {
               ))}
               {months.length>=3&&<option value="3m">Last 3 months</option>}
               {months.length>1&&<option value="all">All uploaded data</option>}
-              <option value="custom">Custom range...</option>
             </select>
-            {period==='custom'&&(
-              <>
-                <input type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)} style={{background:'#ffffff',border:'1px solid rgba(0,0,0,0.12)',borderRadius:8,padding:'7px 10px',color:'#1a1a1a',fontSize:14,outline:'none',fontFamily:F}}/>
-                <span style={{color:'#8a8a85',fontSize:14}}>→</span>
-                <input type="date" value={customEnd} onChange={e=>setCustomEnd(e.target.value)} style={{background:'#ffffff',border:'1px solid rgba(0,0,0,0.12)',borderRadius:8,padding:'7px 10px',color:'#1a1a1a',fontSize:14,outline:'none',fontFamily:F}}/>
-              </>
-            )}
             {periodAccounts.length>1&&(
               <div style={{position:'relative'}}>
                 <button onClick={()=>setShowAcctMenu(s=>!s)} style={{background:'#ffffff',border:`1px solid ${acctFilter!=='all'?'#e85d3c':'rgba(0,0,0,0.12)'}`,borderRadius:10,padding:'8px 14px',color:acctFilter!=='all'?'#e85d3c':'#1a1a1a',fontSize:15,cursor:'pointer',fontFamily:F}}>

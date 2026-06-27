@@ -279,7 +279,6 @@ export default function Upload() {
   }
 
   const uploadAll = async (queue) => {
-    console.log("UPLOADALL CALLED", new Date().toISOString())
     const currentQueue = queue || fileQueue
     const waiting = currentQueue.filter(f => f.status === FILE_STATES.waiting)
     if (!waiting.length) return
@@ -444,7 +443,6 @@ export default function Upload() {
             <div style={{ fontSize:38, marginBottom:12 }}>📎</div>
             <p style={{ color:'#1a1a1a', fontWeight:600, fontSize:18, marginBottom:6 }}>Drop files here or click to browse</p>
             <p style={{ color:'#8a8a85', fontSize:15, marginBottom:8 }}>PDF · CSV · XLSX · XLS · OFX · QFX</p>
-            <p style={{ color:'#e85d3c', fontSize:14, fontWeight:500 }}>Any bank · any format · we handle the rest</p>
             <input id="multiFileInput" type="file" accept=".pdf,.csv,.xlsx,.xls,.ofx,.qfx" multiple style={{ display:'none' }} onChange={e => addFiles(e.target.files)}/>
           </div>
 
