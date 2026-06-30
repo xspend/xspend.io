@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
-import Waitlist from './pages/Waitlist'
 import Landing from './pages/Landing'
 import Onboarding from './pages/Onboarding'
 import Dashboard from './pages/Dashboard'
@@ -45,7 +44,6 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="/waitlist" element={<Waitlist />} />
         <Route path="/onboarding" element={<Onboarding />} />
 
         <Route path="/app" element={<RequireAuth><Navigate to="/app/upload" replace /></RequireAuth>} />

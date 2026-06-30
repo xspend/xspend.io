@@ -332,7 +332,7 @@ export default function Landing() {
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-          <Link to={import.meta.env.PROD ? "/waitlist" : "/signup"} style={{
+          <Link to="/signup" style={{
             background: C.ctaBg,
             color: C.ctaText,
             border: 'none',
