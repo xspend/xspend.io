@@ -359,15 +359,21 @@ export default function Dashboard() {
     return 'Selected period'
   },[period,activePeriodMonth,customStart,customEnd])
 
-  // Fetch insights when month changes — must be after activePeriodMonth is defined
+  // Fetch insights whenever the selected PERIOD changes. Drive off
+  // activeMonthsCsv (resolves for latest/month/3m/all/custom) so insights
+  // respect the filter — previously this bailed when activePeriodMonth was
+  // null (3m/all/custom), leaving insights stuck on one month.
   useEffect(() => {
-    if (!activePeriodMonth) return
+    if (!activeMonthsCsv) return
+    const monthsList = activeMonthsCsv.split(',').filter(Boolean)
+    if (!monthsList.length) return
+    const focal = monthsList[monthsList.length - 1]  // latest month in selection
     setInsightsLoading(true)
-    fetch(`${API_URL}/insights?month=${activePeriodMonth}`)
+    fetch(`${API_URL}/insights?month=${focal}&months=${encodeURIComponent(activeMonthsCsv)}`)
       .then(r => r.json())
       .then(data => { setInsights(Array.isArray(data) ? data : []); setInsightsLoading(false) })
       .catch(() => setInsightsLoading(false))
-  }, [activePeriodMonth])
+  }, [activeMonthsCsv])
 
   const globalFiltered = useMemo(()=>filterPeriod(txs,period,months,customStart,customEnd),[txs,period,months,customStart,customEnd])
   const acctFiltered = useMemo(()=>acctFilter==='all'?globalFiltered:globalFiltered.filter(t=>t.bank_source===acctFilter),[globalFiltered,acctFilter])

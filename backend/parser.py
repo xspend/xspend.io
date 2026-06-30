@@ -590,6 +590,8 @@ def _detect_bank_from_raw(file_bytes: bytes) -> str:
     # BofA's CSV signature: balance-summary preamble.
     if 'bank of america' in head or ('beginning balance' in head and 'ending balance' in head):
         return 'Bank of America'
+    if 'apple card' in head:
+        return 'Apple Card'
     if 'american express' in head or 'amex' in head:
         return 'American Express'
     if 'wells fargo' in head:
@@ -635,7 +637,10 @@ def parse_csv(file_bytes: bytes, bank_hint: str = None) -> tuple:
     for row in df.head(5).values:
         text += ' ' + ' '.join([str(v).lower() for v in row if v and str(v) != 'nan'])
 
-    bank = raw_bank or bank_hint or detect_bank_from_text(text) or 'Unknown Bank'
+    # A bank_hint derived from the filename is the most reliable signal, so it
+    # wins over content sniffing (a stray merchant name like 'chase' in a
+    # transaction row must not override an 'Apple Card' filename).
+    bank = bank_hint or raw_bank or detect_bank_from_text(text) or 'Unknown Bank'
     return rows_from_dataframe(df, bank, 'csv'), bank
 
 def parse_toll_xlsx(file_bytes: bytes) -> tuple:
@@ -1225,6 +1230,18 @@ def parse_statement(filename: str, file_bytes: bytes, bank_name: str = None, use
             bank_hint = 'Barclays'
         elif 'capital' in fname_lower:
             bank_hint = 'Capital One'
+        elif 'apple card' in fname_lower or 'applecard' in fname_lower or 'apple_card' in fname_lower:
+            bank_hint = 'Apple Card'
+        elif 'synchrony' in fname_lower:
+            bank_hint = 'Synchrony Bank'
+        elif 'sofi' in fname_lower:
+            bank_hint = 'SoFi'
+        elif 'chime' in fname_lower:
+            bank_hint = 'Chime'
+        elif 'ally' in fname_lower:
+            bank_hint = 'Ally'
+        elif 'marcus' in fname_lower:
+            bank_hint = 'Marcus'
         elif 'macys' in fname_lower or 'macy' in fname_lower:
             bank_hint = 'Macys-Citi'
 

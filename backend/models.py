@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Date, DateTime, Boolean, Text, Integer, ForeignKey
+from sqlalchemy import Column, String, Float, Date, DateTime, Boolean, Text, Integer, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -116,8 +116,9 @@ class Transaction(Base):
     notes = Column(String(500), nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     project = relationship("Project", back_populates="transactions")
-    fingerprint = Column(String, unique=True, index=True, nullable=True)
+    fingerprint = Column(String, index=True, nullable=True)  # NOT globally unique — see __table_args__ (unique per user)
     fingerprint_hash = Column(String(255), nullable=True)
+    __table_args__ = (UniqueConstraint('fingerprint', 'user_id', name='uq_txn_fingerprint_user'),)
     is_duplicate = Column(Boolean, default=False)
     is_pending = Column(Boolean, default=False)
     status = Column(String, default="posted")

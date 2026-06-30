@@ -268,7 +268,7 @@ async def upload_statement(
     current_user: str = Depends(get_current_user)
 ):
     contents = await file.read()
-    print(f"UPLOAD: {file.filename} size={len(contents)} bank={bank_name}")
+    print(f"UPLOAD: {file.filename} size={len(contents)} bank={bank_name} AS_USER={current_user}")
 
     # Parse an account label from the filename so multiple accounts at the same
     # bank (e.g. two Chase cards) don't dedup against each other. No user input.
@@ -1552,7 +1552,7 @@ def dismiss_merchant_rule(data: dict, db: Session = Depends(get_db), current_use
 
 # ── Credit Nullification ──
 @app.get("/insights")
-def get_insights(month: str = None, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
+def get_insights(month: str = None, months: str = None, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     from insights import generate_insights
     import sqlalchemy as _sa
 
@@ -1574,6 +1574,14 @@ def get_insights(month: str = None, db: Session = Depends(get_db), current_user:
         if d.get('transaction_date') is not None:
             d['transaction_date'] = str(d['transaction_date'])
         txs.append(d)
+
+    # Scope to the selected period (CSV of YYYY-MM). If 'months' is given, keep
+    # only transactions whose month is in the selection. Empty/None -> all.
+    if months:
+        _wanted = {m.strip() for m in months.split(',') if m.strip()}
+        if _wanted:
+            txs = [t for t in txs
+                   if (t.get('transaction_date') or '')[:7] in _wanted]
 
     profile_row = db.execute(_sa.text(
         "SELECT monthly_budget FROM users WHERE user_id = :u"
@@ -1606,6 +1614,19 @@ def auth_signup(data: dict, db: Session = Depends(get_db)):
     import re as _re_v
     if not _re_v.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
         raise HTTPException(status_code=400, detail="Please enter a valid email address")
+    # Common domain-typo guard (gmai.com, yaho.com, etc.) with a suggestion.
+    _COMMON_TYPOS = {
+        "gmai.com": "gmail.com", "gmial.com": "gmail.com", "gmal.com": "gmail.com",
+        "gmail.co": "gmail.com", "gnail.com": "gmail.com", "gmaill.com": "gmail.com",
+        "yaho.com": "yahoo.com", "yahooo.com": "yahoo.com", "yahoo.co": "yahoo.com",
+        "hotmial.com": "hotmail.com", "hotmai.com": "hotmail.com", "hotmil.com": "hotmail.com",
+        "outlok.com": "outlook.com", "outloo.com": "outlook.com",
+        "iclod.com": "icloud.com", "icloud.co": "icloud.com",
+    }
+    _dom = email.split("@")[1] if "@" in email else ""
+    if _dom in _COMMON_TYPOS:
+        _user = email.split("@")[0]
+        raise HTTPException(status_code=400, detail=f"Did you mean {_user}@{_COMMON_TYPOS[_dom]}? Please check your email address.")
     if len(password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     existing = db.execute(_sa.text("SELECT user_id FROM users WHERE email = :e"), {"e": email}).fetchone()
