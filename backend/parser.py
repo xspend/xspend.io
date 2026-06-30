@@ -587,6 +587,10 @@ def _detect_bank_from_raw(file_bytes: bytes) -> str:
     except Exception:
         text = file_bytes.decode('latin-1', errors='ignore').lower()
     head = text[:1500]  # the preamble / statement header lives at the very top
+    # Amex activity.csv signature columns — unique to Amex, no preamble bank name.
+    # Check the whole text (the header row may be past the first 1500 chars).
+    if 'extended details' in text and 'appears on your statement as' in text:
+        return 'American Express'
     # BofA's CSV signature: balance-summary preamble.
     if 'bank of america' in head or ('beginning balance' in head and 'ending balance' in head):
         return 'Bank of America'
@@ -633,6 +637,10 @@ def parse_csv(file_bytes: bytes, bank_hint: str = None) -> tuple:
     # Detect bank: account-level raw signal (preamble/header) FIRST, then filename hint,
     # then transaction-content sniffing as a last resort.
     raw_bank = _detect_bank_from_raw(file_bytes)
+    # Amex activity.csv signature columns win over any stray row content.
+    _cols_lower = [str(c).lower() for c in df.columns]
+    if 'extended details' in _cols_lower and 'appears on your statement as' in _cols_lower:
+        raw_bank = 'American Express'
     text = ' '.join([str(c).lower() for c in df.columns])
     for row in df.head(5).values:
         text += ' ' + ' '.join([str(v).lower() for v in row if v and str(v) != 'nan'])
