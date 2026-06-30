@@ -24,9 +24,14 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="FinanceAI API")
 
+# Allowed origins: localhost for dev + any production domains from the
+# FRONTEND_ORIGINS env var (comma-separated). Set this in Render to your Vercel
+# domain so the deployed frontend isn't blocked by CORS.
+_default_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+_prod_origins = [o.strip() for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_default_origins + _prod_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
