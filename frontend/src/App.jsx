@@ -43,8 +43,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/login" element={import.meta.env.PROD ? <Navigate to="/waitlist" replace /> : <Login />} />
-        <Route path="/signup" element={import.meta.env.PROD ? <Navigate to="/waitlist" replace /> : <Signup />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/waitlist" element={<Waitlist />} />
         <Route path="/onboarding" element={<Onboarding />} />
 
