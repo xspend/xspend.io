@@ -893,6 +893,8 @@ def classify_with_meta(
             if not rule.get('is_active', True):
                 continue
             match_val = (rule.get('match_value') or '').lower()
+            if not match_val:
+                continue  # blank match_value would match everything -> skip
             match_type = rule.get('match_type', 'contains')
             match_field = rule.get('match_field', 'merchant')
             target = merchant if match_field == 'merchant' else normalized
