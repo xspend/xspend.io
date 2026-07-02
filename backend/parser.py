@@ -8,6 +8,7 @@ Supports: Chase, Bank of America, American Express, Capital One,
 import pdfplumber
 import pandas as pd
 import io
+import os
 import re
 try:
     from ofxparse import OfxParser
@@ -1200,6 +1201,75 @@ def get_format_hint(bank: str) -> str:
             return f"For best results with {bank}, download as {fmt}: {instructions}"
     return "Try downloading your statement as CSV from your bank's website."
 
+
+# ── LLM fallback for unknown / unparseable banks ─────────────────────────────
+# Added by patch_llm_fallback.py. Converts llm_fallback.parse_statement() output
+# into the raw-dict shape parse_statement() feeds to enrich_transaction().
+
+def _rows_from_llm_fallback(file_bytes, filename):
+    """Run the LLM fallback on the file bytes and return (raw_rows, bank, needs_review).
+    raw_rows carry needs_review/review_reason so they survive into storage.
+    Returns ([], None, False) if the fallback can't handle the file."""
+    import tempfile, os as _os
+    try:
+        import llm_fallback as _llm
+    except Exception as _e:
+        print(f"[llm_fallback] module not importable: {_e}")
+        return [], None, False
+
+    suffix = _os.path.splitext(filename or "")[1] or ".pdf"
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as _tf:
+            _tf.write(file_bytes)
+            tmp_path = _tf.name
+        result = _llm.parse_statement(tmp_path)
+    except Exception as _e:
+        print(f"[llm_fallback] parse failed: {_e}")
+        return [], None, False
+    finally:
+        if tmp_path and _os.path.exists(tmp_path):
+            try:
+                _os.remove(tmp_path)
+            except OSError:
+                pass
+
+    bank = result.get("bank_name") or "Unknown Bank"
+    rows = []
+    for t in result.get("transactions", []):
+        amt = t.get("amount")
+        try:
+            amt = abs(float(amt))
+        except (TypeError, ValueError):
+            amt = None
+        direction = t.get("direction")
+        desc = t.get("description") or ""
+
+        if direction == "credit":
+            signed = amt if amt is not None else None            # money in stays positive
+            low = desc.lower()
+            ttype = "refund" if ("refund" in low or "return" in low) else "card_credit"
+        else:
+            signed = -amt if amt is not None else None           # charges negative
+            ttype = "expense"
+
+        rows.append({
+            "transaction_date": t.get("date"),                   # "%Y-%m-%d" string
+            "amount": signed,
+            "description": desc,
+            "original_description": desc,
+            "raw_description": desc,
+            "category": t.get("category") or "Other",
+            "transaction_type": ttype,                           # enrich may refine this
+            "currency": "USD",
+            "needs_review": bool(t.get("review")),
+            "review_reason": t.get("review_reason"),
+            "import_source": "llm_fallback",
+        })
+
+    return rows, bank, result.get("needs_review", False)
+
+
 def parse_statement(filename: str, file_bytes: bytes, bank_name: str = None, user_rules: list = None):
     fname = filename.lower()
     bank_hint = bank_name if bank_name and bank_name != 'Unknown Bank' else None
@@ -1287,9 +1357,28 @@ def parse_statement(filename: str, file_bytes: bytes, bank_name: str = None, use
 
     final_bank = detected_bank or bank_hint or 'Unknown Bank'
 
+    # ── LLM fallback: if template parsing produced nothing, or couldn't identify
+    # the bank, hand the raw file to the LLM. Its rows go through the SAME enrich
+    # loop below, so merchant rules / type detection still get a say.
+    if (not raw) or final_bank == 'Unknown Bank':
+        _llm_rows, _llm_bank, _ = _rows_from_llm_fallback(file_bytes, filename)
+        if _llm_rows:
+            print(f"[llm_fallback] used for {filename}: {len(_llm_rows)} rows, bank={_llm_bank}")
+            raw = _llm_rows
+            if _llm_bank and _llm_bank != 'Unknown Bank':
+                final_bank = _llm_bank
+
     enriched = []
     for tx in raw:
         tx['bank_source'] = final_bank
-        enriched.append(enrich_transaction(tx, user_rules))
+        _nr = tx.get('needs_review', False)
+        _rr = tx.get('review_reason')
+        tx = enrich_transaction(tx, user_rules)
+        # preserve our review flags across enrichment (enrich may return a fresh dict)
+        if _nr:
+            tx['needs_review'] = True
+            if _rr and not tx.get('review_reason'):
+                tx['review_reason'] = _rr
+        enriched.append(tx)
 
     return enriched, final_bank
