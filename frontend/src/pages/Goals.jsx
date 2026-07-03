@@ -125,6 +125,25 @@ function ProjectCard({ project, onDelete, allTransactions }) {
 function CreateProjectModal({ onClose, onCreated }) {
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
+  // Slice 4: auto-populate filter state
+  const [accounts, setAccounts] = useState([])
+  const [selectedAccounts, setSelectedAccounts] = useState([])
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [addedCount, setAddedCount] = useState(null)
+
+  useEffect(() => {
+    fetch(`${API_URL}/transactions`)
+      .then(r => r.json())
+      .then(txs => {
+        const uniq = [...new Set((txs || []).map(t => t.bank_source).filter(Boolean))]
+        setAccounts(uniq)
+      })
+      .catch(() => {})
+  }, [])
+
+  const toggleAccount = (a) =>
+    setSelectedAccounts(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a])
 
   const EXAMPLES = [
     { label:'✈️ Trip', name:'Trip' },
@@ -139,11 +158,23 @@ function CreateProjectModal({ onClose, onCreated }) {
     if (!name.trim()) return
     setSaving(true)
     try {
-      await fetch(`${API_URL}/projects`, {
+      const res = await fetch(`${API_URL}/projects`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, type: 'custom', target_amount: null, target_date: null })
+        body: JSON.stringify({
+          name, type: 'custom', target_amount: null, target_date: null,
+          filter_accounts: selectedAccounts.length ? selectedAccounts : null,
+          filter_start_date: startDate || null,
+          filter_end_date: endDate || null,
+        })
       })
-      onCreated(); onClose()
+      const data = await res.json().catch(() => ({}))
+      const added = data.transactions_added
+      if (added && added > 0) {
+        setAddedCount(added)
+        setTimeout(() => { onCreated(); onClose() }, 1400)
+      } else {
+        onCreated(); onClose()
+      }
     } catch(e) { console.error(e) }
     finally { setSaving(false) }
   }
@@ -178,6 +209,42 @@ function CreateProjectModal({ onClose, onCreated }) {
             ))}
           </div>
         </div>
+
+        {/* Slice 4: auto-populate filter (optional) */}
+        <div style={{ marginBottom:20, paddingTop:4 }}>
+          <div style={{ fontSize:13, color:'#5a5a5a', fontWeight:600, letterSpacing:'1px', textTransform:'uppercase', marginBottom:8 }}>Auto-add transactions <span style={{ color:'#b0b0a8', fontWeight:400, textTransform:'none', letterSpacing:0 }}>· optional</span></div>
+          <p style={{ fontSize:13, color:'#8a8a85', margin:'0 0 12px' }}>Pick accounts and a date range — matching spending fills in automatically.</p>
+
+          {accounts.length > 0 && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:12 }}>
+              {accounts.map(a => (
+                <button key={a} type="button" onClick={() => toggleAccount(a)}
+                  style={{ background: selectedAccounts.includes(a) ? 'rgba(232,93,60,0.15)' : '#faf9f5', border: `1px solid ${selectedAccounts.includes(a) ? '#e85d3c' : 'rgba(0,0,0,0.08)'}`, borderRadius:10, padding:'8px 14px', fontSize:14, color: selectedAccounts.includes(a) ? '#e85d3c' : '#5a5a5a', cursor:'pointer', fontFamily:F }}>
+                  {selectedAccounts.includes(a) ? '✓ ' : ''}{a}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display:'flex', gap:10 }}>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:12, color:'#8a8a85', marginBottom:4 }}>From</div>
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                style={{ background:'#faf9f5', border:'1px solid rgba(0,0,0,0.08)', borderRadius:10, padding:'9px 12px', color:'#1a1a1a', fontSize:14, outline:'none', width:'100%', fontFamily:F, boxSizing:'border-box' }}/>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:12, color:'#8a8a85', marginBottom:4 }}>To</div>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                style={{ background:'#faf9f5', border:'1px solid rgba(0,0,0,0.08)', borderRadius:10, padding:'9px 12px', color:'#1a1a1a', fontSize:14, outline:'none', width:'100%', fontFamily:F, boxSizing:'border-box' }}/>
+            </div>
+          </div>
+        </div>
+
+        {addedCount != null && (
+          <div style={{ marginBottom:16, padding:'10px 14px', background:'rgba(34,160,90,0.10)', border:'1px solid rgba(34,160,90,0.3)', borderRadius:10, color:'#1a7a44', fontSize:14, fontFamily:F }}>
+            ✓ {addedCount} transaction{addedCount !== 1 ? 's' : ''} added to this project
+          </div>
+        )}
 
         <div style={{ background:'rgba(232,93,60,0.06)', border:'1px solid rgba(232,93,60,0.15)', borderRadius:10, padding:'12px 16px', marginBottom:24 }}>
           <p style={{ color:'#8a8a85', fontSize:14, lineHeight:1.6, margin:0 }}>

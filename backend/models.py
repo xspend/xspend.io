@@ -79,6 +79,12 @@ class Project(Base):
     target_date = Column(Date, nullable=True)
     is_archived = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())
+    # Auto-populate filter (Slice 1). All nullable; empty => manual-only project.
+    filter_accounts = Column(Text, nullable=True)    # JSON list of account_name strings
+    filter_start_date = Column(Date, nullable=True)
+    filter_end_date = Column(Date, nullable=True)
+    filter_categories = Column(Text, nullable=True)  # JSON list of category strings
+    is_auto = Column(Boolean, default=False)         # True when a filter is set
     transactions = relationship("Transaction", back_populates="project")
 
 # Legacy alias
@@ -116,6 +122,7 @@ class Transaction(Base):
     notes = Column(String(500), nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     project = relationship("Project", back_populates="transactions")
+    project_review_pending = Column(Boolean, default=False)  # auto-added, awaiting review
     fingerprint = Column(String, index=True, nullable=True)  # NOT globally unique — see __table_args__ (unique per user)
     fingerprint_hash = Column(String(255), nullable=True)
     __table_args__ = (UniqueConstraint('fingerprint', 'user_id', name='uq_txn_fingerprint_user'),)
