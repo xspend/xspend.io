@@ -10,8 +10,12 @@ SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./financeai.db")
 # check_same_thread is a SQLite-only arg; only pass it when actually on SQLite.
 _connect_args = {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
 
+_pool_kwargs = {} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
+}
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args=_connect_args
+    SQLALCHEMY_DATABASE_URL, connect_args=_connect_args, **_pool_kwargs
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
