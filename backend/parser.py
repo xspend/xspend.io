@@ -1349,17 +1349,13 @@ def parse_statement(filename: str, file_bytes: bytes, bank_name: str = None, use
             msg += f" {hint}"
         raise ValueError(msg)
 
-    # ── Threshold check ──
-    passed, valid_ratio = check_parse_threshold(raw, parse_mode)
-    if not passed and len(raw) == 0:
-        hint = get_format_hint(bank_hint or detected_bank if 'detected_bank' in dir() else '')
-        raise ValueError(f"No transactions found in this file. {hint}")
-
     final_bank = detected_bank or bank_hint or 'Unknown Bank'
 
-    # ── LLM fallback: if template parsing produced nothing, or couldn't identify
-    # the bank, hand the raw file to the LLM. Its rows go through the SAME enrich
-    # loop below, so merchant rules / type detection still get a say.
+    # ── LLM fallback FIRST: if template parsing produced nothing, or couldn't
+    # identify the bank, hand the raw file to the LLM BEFORE the threshold check
+    # rejects an empty parse. This is what lets banks the templates can't read
+    # (e.g. PNC, Chase debit) get parsed instead of silently failing. LLM rows go
+    # through the SAME enrich loop below, so merchant rules still get a say.
     if (not raw) or final_bank == 'Unknown Bank':
         _llm_rows, _llm_bank, _ = _rows_from_llm_fallback(file_bytes, filename)
         if _llm_rows:
@@ -1367,6 +1363,13 @@ def parse_statement(filename: str, file_bytes: bytes, bank_name: str = None, use
             raw = _llm_rows
             if _llm_bank and _llm_bank != 'Unknown Bank':
                 final_bank = _llm_bank
+
+    # ── Threshold check (AFTER the fallback): only give up if we STILL have
+    # nothing, i.e. neither the template nor the LLM could read the file.
+    passed, valid_ratio = check_parse_threshold(raw, parse_mode)
+    if not passed and len(raw) == 0:
+        hint = get_format_hint(bank_hint or (detected_bank if 'detected_bank' in dir() else ''))
+        raise ValueError(f"No transactions found in this file. {hint}")
 
     enriched = []
     for tx in raw:
