@@ -361,6 +361,7 @@ async def upload_statement(
         fitid = t.get("external_transaction_id", "").strip()
         if fitid and len(fitid) > 5:
             if fitid in existing_fitids:
+                print(f"[DEDUP] SKIP-FITID   {(t.get('description') or '')[:30]}")
                 skipped += 1
                 skipped_merchants.append(t.get('description','')[:20])
                 continue
@@ -381,6 +382,7 @@ async def upload_statement(
         fp = t.get("fingerprint")
         if fp:
             if fp in existing_fps:
+                print(f"[DEDUP] SKIP-FP      {(t.get('description') or '')[:30]}  fp={fp[:8]}  acct={t.get('account_name')}")
                 skipped += 1
                 skipped_merchants.append(t.get('description','')[:20])
                 continue
@@ -399,11 +401,11 @@ async def upload_statement(
                 amount = t["amount"]
                 desc_key = t["description"].lower().strip()
                 _candidates = fuzzy_index.get((t.get("account_name"), round(float(amount), 2)), [])
-                fuzzy_match = any(
-                    (date_min <= cand_date <= date_max) and cand_desc == desc_key
-                    for cand_date, cand_desc in _candidates
-                )
+                _matched_cand = next(((cd, cx) for cd, cx in _candidates
+                                      if (date_min <= cd <= date_max) and cx == desc_key), None)
+                fuzzy_match = _matched_cand is not None
                 if fuzzy_match:
+                    print(f"[DEDUP] SKIP-FUZZY   {(t.get('description') or '')[:30]}  amt={amount}  matched={_matched_cand}")
                     skipped += 1
                     skipped_merchants.append(t.get('description','')[:20] + ' (fuzzy)')
                     continue
@@ -413,6 +415,7 @@ async def upload_statement(
         except:
             date = None
 
+        print(f"[DEDUP] SAVE         {(t.get('description') or '')[:30]}  fp={(t.get('fingerprint') or '')[:8]}  acct={t.get('account_name')}")
         max_id += 1
         cat_name = t.get("category", "Other")
         cat_id = cat_map.get(cat_name)
