@@ -231,17 +231,12 @@ def fix_amount_for_bank(amount: float, description: str, bank: str, has_debit_cr
         return amount
 
     if bank in POSITIVE_EXPENSE_BANKS:
-        # These banks export expenses as positive — flip sign
-        # But payments/credits should stay positive
-        desc_lower = description.lower()
-        is_payment = any(p in desc_lower for p in [
-            'payment', 'thank you', 'autopay', 'credit', 'refund',
-            'return', 'adjustment', 'reward', 'cash back', 'cashback'
-        ])
-        if is_payment:
-            return -abs(amount)   # payments become negative (money out toward card)
-        else:
-            return -abs(amount)   # expenses become negative
+        # These banks (Amex, Apple Card, Discover, ...) use the OPPOSITE sign
+        # convention from us: charges positive, refunds/credits/payments negative.
+        # Negate to convert AND preserve the distinction (NOT -abs, which destroys
+        # refunds):  charge +100 -> -100 (expense);  refund -100 -> +100 (money back).
+        # The statement's sign is authoritative; don't guess refunds from keywords.
+        return -amount
 
     return amount
 

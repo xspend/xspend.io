@@ -253,6 +253,7 @@ RAW_CATEGORY_PATTERNS = [
 
     (r'\b(almond.?house|burma.?burma|premium.?lifestyle|onamalu|'
      r'ikea.?india|hpcl|fern.?thai|yummy.?fresh|el.?mixteco)\b', 3, 'Food & Dining'),
+    (r'\b(bagel|wok|ramen|menya|pao|noodle|noodles|udon|pho|banh.?mi|poke|dumpling|dim.?sum|hotpot|hot.?pot|izakaya|teriyaki|katsu|bibimbap|congee|gelato|creamery|patisserie|creperie|taqueria)\b', 4, 'Food & Dining'),
     (r'\b(dosa|curry|biryani|tandoor|halal|kebab|shawarma|falafel|hummus|'
      r'dim.?sum|dumpling|wonton|banh|bubble.?tea|milk.?tea|boba|'
      r'spring.?roll|fried.?rice|pad.?thai|poke|acai|'
@@ -626,11 +627,14 @@ def classify_transaction_type(
     # Positive amount with no strong income signal → possible expense (Amex/Citi style)
     # or unrecognized income
     if amount > 0:
-        # Check if it matches expense categories strongly
+        # Parser already flipped positive-expense-bank signs (charges are now
+        # negative). So a positive amount on a card bank = money back = refund,
+        # NOT expense. (This branch returned 'expense' before the sign fix.)
         bank_lower = (bank or '').lower()
-        positive_expense_banks = {'amex', 'american express', 'citi', 'discover'}
+        positive_expense_banks = {'amex', 'american express', 'citi', 'discover',
+                                  'apple card', 'synchrony', 'barclays'}
         if any(b in bank_lower for b in positive_expense_banks):
-            return 'expense', None
+            return 'refund', None
         return 'income', 'positive_amount_unclear'
 
     return 'expense', None
