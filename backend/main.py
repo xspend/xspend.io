@@ -332,7 +332,8 @@ async def upload_statement(
     _t0 = _time.time()
     saved, skipped, pending_skipped, review_count = [], 0, 0, 0
     skipped_merchants = []
-    max_id = db.query(Transaction).count()
+    import sqlalchemy as _sa_maxid
+    max_id = (db.query(_sa_maxid.func.max(Transaction.id)).scalar() or 0)
 
     # ── PERF: load existing dedup data ONCE into memory (was ~3 queries per
     # transaction = hundreds of network round-trips on remote Postgres). ──
@@ -473,7 +474,14 @@ async def upload_statement(
                 review_count += 1
         except Exception as dup_err:
             db.rollback()
-            skipped += 1
+            # Real duplicates (unique fingerprint) are expected; log anything else
+            # loudly instead of silently counting it as a dupe (that hid a real bug).
+            _emsg = str(dup_err)
+            if 'fingerprint' in _emsg.lower() or 'unique' in _emsg.lower():
+                skipped += 1
+            else:
+                print(f"[INSERT-FAIL] {(t.get('description') or '')[:30]}: {_emsg[:200]}")
+                skipped += 1
             continue
 
     db.commit()
@@ -628,7 +636,8 @@ def add_manual(tx: ManualTransaction, db: Session = Depends(get_db), current_use
         date = datetime.today().date()
 
     fp = generate_fingerprint("manual", str(date), tx.amount, tx.description)
-    max_id = db.query(Transaction).count() + 1
+    import sqlalchemy as _sa_maxid2
+    max_id = (db.query(_sa_maxid2.func.max(Transaction.id)).scalar() or 0) + 1
 
     cat_map = {c.category_name: c.category_id for c in db.query(Category).all()}
     cat_id = cat_map.get(tx.category)
