@@ -213,3 +213,14 @@ def seed_default_categories(db):
             display_order=i,
         ))
     db.commit()
+
+
+
+class ChatLog(Base):
+    """One row per curated-prompt use. Monthly cap = count of rows this month.
+    Doubles as analytics: which prompts do people actually use?"""
+    __tablename__ = "chat_log"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=False)
+    prompt_id = Column(String(50), nullable=False)
+    created_at = Column(DateTime, default=func.now())
