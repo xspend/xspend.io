@@ -1229,6 +1229,19 @@ def _rows_from_llm_fallback(file_bytes, filename):
             except OSError:
                 pass
 
+    try:
+        _n = len(result.get("transactions") or [])
+        _st = (result.get("reconciliation") or {}).get("status")
+        print(f"[llm_fallback] model returned {_n} transactions, "
+              f"bank={result.get('bank_name')}, kind={result.get('source_kind')}, "
+              f"reconcile={_st}", flush=True)
+        if _n == 0:
+            print(f"[llm_fallback] EMPTY RESULT for {filename} — the model read the "
+                  f"file but found no transactions. Check text extraction / prompt.",
+                  flush=True)
+    except Exception as _le:
+        print(f"[llm_fallback] could not summarise result: {_le}", flush=True)
+
     bank = result.get("bank_name") or "Unknown Bank"
     rows = []
     for t in result.get("transactions", []):
@@ -1353,6 +1366,7 @@ def parse_statement(filename: str, file_bytes: bytes, bank_name: str = None, use
     # through the SAME enrich loop below, so merchant rules still get a say.
     if (not raw) or final_bank == 'Unknown Bank':
         _llm_rows, _llm_bank, _ = _rows_from_llm_fallback(file_bytes, filename)
+        print(f"[llm_fallback] produced {len(_llm_rows)} usable rows for {filename}", flush=True)
         if _llm_rows:
             print(f"[llm_fallback] used for {filename}: {len(_llm_rows)} rows, bank={_llm_bank}")
             raw = _llm_rows
