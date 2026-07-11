@@ -169,7 +169,7 @@ def _call_llm(scrubbed_text):
         messages=[{"role": "user", "content": prompt}],
     )
     text = "".join(b.text for b in resp.content if b.type == "text")
-    return text, resp.usage
+    return text, resp.usage, resp.stop_reason
 
 def _parse_json(raw):
     cleaned = raw.strip()
@@ -265,6 +265,53 @@ def flag_transactions(txns, reconcile_status):
 
 # ---- the public entry point -------------------------------------------------
 
+def _extract_chunked(scrubbed, max_lines=60):
+    """Split the statement into line-based chunks, extract each, merge.
+    Returns a merged data dict shaped like a single _parse_json result."""
+    lines = scrubbed.splitlines()
+    chunks = []
+    for i in range(0, len(lines), max_lines):
+        chunk = "\n".join(lines[i:i + max_lines])
+        if chunk.strip():
+            chunks.append(chunk)
+    if not chunks:
+        chunks = [scrubbed]
+
+    print(f"[llm] statement split into {len(chunks)} chunks (~{max_lines} lines each)", flush=True)
+
+    merged = {"bank_name": None, "account_last4": None, "statement_period": None,
+              "opening_balance": None, "closing_balance": None, "transactions": []}
+    in_tok = out_tok = 0
+
+    for idx, chunk in enumerate(chunks):
+        raw, usage, stop = _call_llm(chunk)
+        in_tok += usage.input_tokens
+        out_tok += usage.output_tokens
+        if stop == "max_tokens":
+            print(f"[llm] chunk {idx+1}/{len(chunks)} STILL truncated — "
+                  f"consider smaller max_lines", flush=True)
+        try:
+            d = _parse_json(raw)
+        except Exception as e:
+            print(f"[llm] chunk {idx+1}/{len(chunks)} JSON parse failed: {e}", flush=True)
+            continue
+        # metadata: first non-null wins for opening/bank/etc; closing = last seen
+        for k in ("bank_name", "account_last4", "statement_period", "opening_balance"):
+            if merged[k] is None and d.get(k) is not None:
+                merged[k] = d.get(k)
+        if d.get("closing_balance") is not None:
+            merged["closing_balance"] = d.get("closing_balance")
+        merged["transactions"].extend(d.get("transactions") or [])
+
+    print(f"[llm] merged {len(merged['transactions'])} transactions from "
+          f"{len(chunks)} chunks", flush=True)
+
+    class _U:
+        input_tokens = in_tok
+        output_tokens = out_tok
+    return merged, _U()
+
+
 def parse_statement(path):
     """Parse one statement file end to end. Returns the result dict (see module docstring).
     Raises ValueError for unsupported types or oversized/empty files."""
@@ -278,8 +325,17 @@ def parse_statement(path):
         raise ValueError(f"file too large for LLM route (~{int(approx_tokens):,} tokens) - route to manual review")
 
     scrubbed, _masked = strip_pii(text)
-    raw, usage = _call_llm(scrubbed)
-    data = _parse_json(raw)
+    raw, usage, stop = _call_llm(scrubbed)
+    data = None
+    if stop != "max_tokens":
+        try:
+            data = _parse_json(raw)
+        except Exception as e:
+            print(f"[llm] single-pass JSON failed ({e}); retrying chunked", flush=True)
+    else:
+        print("[llm] single-pass response truncated (max_tokens); retrying chunked", flush=True)
+    if data is None:
+        data, usage = _extract_chunked(scrubbed)
 
     rec = reconcile(data)
     txns = flag_transactions(data.get("transactions") or [], rec["status"])
