@@ -275,31 +275,48 @@ def category_signal(category: str) -> tuple:
         return 'variable', 0.85
     return 'unknown', 0.0
 
-def recurrence_signal(merchant_key: str, all_transactions: list) -> tuple:
-    if not merchant_key or not all_transactions:
+def build_classification_index(all_transactions: list):
+    """Precompute {merchant_key8 -> [txn,...]} and the set of months present, so
+    recurrence lookups are O(1) instead of re-scanning + re-normalizing all rows.
+    Returns (merchant_index, all_months)."""
+    merchant_index = defaultdict(list)
+    all_months = set()
+    for t in all_transactions:
+        key8 = normalize_merchant(t.get('description', ''))[:8]
+        if key8:
+            merchant_index[key8].append(t)
+        m = (t.get('transaction_date') or '')[:7]
+        if m:
+            all_months.add(m)
+    return merchant_index, all_months
+
+
+def recurrence_signal(merchant_key: str, all_transactions: list,
+                      merchant_index=None, all_months=None) -> tuple:
+    if not merchant_key:
         return 'unknown', 0.0
 
+    key8 = merchant_key[:8]
+    # Build index on the fly if a caller didn't supply one (back-compat).
+    if merchant_index is None or all_months is None:
+        if not all_transactions:
+            return 'unknown', 0.0
+        merchant_index, all_months = build_classification_index(all_transactions)
+
+    merchant_txs = merchant_index.get(key8, [])
+
     monthly = defaultdict(list)
-    for t in all_transactions:
-        date = t.get('transaction_date') or ''
-        month = date[:7]
-        norm = normalize_merchant(t.get('description', ''))
-        if month and norm and norm[:8] == merchant_key[:8]:
+    for t in merchant_txs:
+        month = (t.get('transaction_date') or '')[:7]
+        if month:
             monthly[month].append(abs(t.get('amount', 0) or 0))
 
     months_present = len(monthly)
-    total_months = len(set(
-        (t.get('transaction_date') or '')[:7]
-        for t in all_transactions
-        if (t.get('transaction_date') or '')[:7]
-    ))
+    total_months = len(all_months)
 
     if total_months < 2 or months_present < 2:
         # Check for quarterly/annual pattern even with limited data
-        all_merchant_txs = [
-            t for t in all_transactions
-            if normalize_merchant(t.get('description',''))[:8] == merchant_key[:8]
-        ]
+        all_merchant_txs = merchant_txs
         if len(all_merchant_txs) == 1:
             amt = abs(all_merchant_txs[0].get('amount', 0) or 0)
             # Large round amounts suggest annual fees/insurance
@@ -381,7 +398,8 @@ def is_keyword_fixed(description: str) -> bool:
         return False
     return any(p.search(description) for p in KEYWORD_FIXED_PATTERNS)
 
-def classify_transaction(tx: dict, all_transactions: list) -> dict:
+def classify_transaction(tx: dict, all_transactions: list,
+                         merchant_index=None, all_months=None) -> dict:
     # Keyword override: known recurring-subscription merchants bypass heuristics.
     # These are fixed even on first upload (no multi-month history needed).
     if is_keyword_fixed(tx.get('description', '')):
@@ -411,6 +429,8 @@ def classify_transaction(tx: dict, all_transactions: list) -> dict:
         }
 
     merchant_key = normalize_merchant(tx.get('description', ''))
+    if merchant_index is None or all_months is None:
+        merchant_index, all_months = build_classification_index(all_transactions)
     cat_label, cat_conf = category_signal(tx.get('category', ''))
     rec_label, rec_conf = recurrence_signal(merchant_key, all_transactions)
 
@@ -467,6 +487,8 @@ def classify_all_transactions(transactions: list, merchant_rules: dict = None) -
         t for t in transactions
         if t.get('transaction_type') == 'expense' and (t.get('amount') or 0) < 0
     ]
+    # Build the recurrence index ONCE for the whole batch (O(n) not O(n^2)).
+    merchant_index, all_months = build_classification_index(expense_txs)
     for tx in expense_txs:
         merchant_key = normalize_merchant(tx.get('description', ''))
         if merchant_rules and merchant_key[:8] in merchant_rules:
@@ -480,7 +502,7 @@ def classify_all_transactions(transactions: list, merchant_rules: dict = None) -
                 'label': 'fixed' if user_decision else 'variable'
             })
             continue
-        result = classify_transaction(tx, expense_txs)
+        result = classify_transaction(tx, expense_txs, merchant_index, all_months)
         result['transaction_id'] = tx.get('transaction_id')
         result['id'] = tx.get('id')
         results.append(result)

@@ -265,22 +265,76 @@ def flag_transactions(txns, reconcile_status):
 
 # ---- the public entry point -------------------------------------------------
 
-def _extract_chunked(scrubbed, max_lines=60):
-    """Split the statement into line-based chunks, extract each, merge.
-    Returns a merged data dict shaped like a single _parse_json result."""
-    lines = scrubbed.splitlines()
+import re as _re_chunk
+
+_DATE_AT_START = _re_chunk.compile(
+    r'^\s*('
+    r'\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?'                       # 06/15, 6-15-2026
+    r'|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}'  # Jun 15
+    r'|\d{4}-\d{2}-\d{2}'                                        # 2026-06-15
+    r')\b', _re_chunk.I)
+
+
+def _is_txn_start(line):
+    return bool(_DATE_AT_START.match(line or ""))
+
+
+def _dedup_key(t):
+    """Stable key mirroring the app's parse-robust fingerprint: date + amount +
+    a normalized merchant stem. Collapses overlap duplicates and re-parse variants."""
+    date = (t.get("date") or "")[:10]
+    try:
+        amt = round(float(t.get("amount") or 0), 2)
+    except (TypeError, ValueError):
+        amt = 0.0
+    desc = (t.get("description") or "").lower()
+    desc = _re_chunk.sub(r'^(?:sq|tst|toast|dd|dsh|paypal|pp|sp|wpy|gum|fs|ven(?:mo)?)\s*\*+\s*', '', desc)
+    for pfx in ("recurring debit card purchase", "debit card purchase", "pos purchase",
+                "web pmt recur-", "web pmt-", "web pmt", "direct payment - purchase",
+                "direct payment -", "direct payment", "intl purch", "ach", "purchase",
+                "payment", "recurring", "debit card", "card"):
+        ds = desc.lstrip(" -*#")
+        if ds.startswith(pfx):
+            desc = ds[len(pfx):]
+    desc = _re_chunk.sub(r'\d{3,}', '', desc)
+    desc = _re_chunk.sub(r'[^a-z0-9 ]', ' ', desc)
+    stem = " ".join([w for w in desc.split() if len(w) > 1][:2])
+    return (date, amt, stem)
+
+
+def _split_boundary_aware(lines, target=55, overlap=6):
+    """Yield chunks of ~target lines, cutting only at transaction boundaries
+    (a date at line start), with `overlap` lines repeated across each cut so a
+    transaction on the boundary is captured whole by at least one chunk."""
     chunks = []
-    for i in range(0, len(lines), max_lines):
-        chunk = "\n".join(lines[i:i + max_lines])
+    i, n = 0, len(lines)
+    while i < n:
+        end = min(i + target, n)
+        # extend `end` forward to the next transaction boundary so we don't cut
+        # mid-transaction (cap the search so a boundary-less blob still splits)
+        j = end
+        while j < n and not _is_txn_start(lines[j]) and j < end + 25:
+            j += 1
+        end = j
+        start = max(0, i - overlap) if i > 0 else 0
+        chunk = "\n".join(lines[start:end])
         if chunk.strip():
             chunks.append(chunk)
-    if not chunks:
-        chunks = [scrubbed]
+        i = end
+    return chunks or ["\n".join(lines)]
 
-    print(f"[llm] statement split into {len(chunks)} chunks (~{max_lines} lines each)", flush=True)
+
+def _extract_chunked(scrubbed, target=55):
+    """Boundary-aware, overlapping chunk extraction with dedup on merge."""
+    lines = scrubbed.splitlines()
+    chunks = _split_boundary_aware(lines, target=target)
+    print(f"[llm] statement split into {len(chunks)} boundary-aware chunks "
+          f"(~{target} lines, overlapped)", flush=True)
 
     merged = {"bank_name": None, "account_last4": None, "statement_period": None,
               "opening_balance": None, "closing_balance": None, "transactions": []}
+    seen = set()
+    dupes = 0
     in_tok = out_tok = 0
 
     for idx, chunk in enumerate(chunks):
@@ -288,23 +342,28 @@ def _extract_chunked(scrubbed, max_lines=60):
         in_tok += usage.input_tokens
         out_tok += usage.output_tokens
         if stop == "max_tokens":
-            print(f"[llm] chunk {idx+1}/{len(chunks)} STILL truncated — "
-                  f"consider smaller max_lines", flush=True)
+            print(f"[llm] chunk {idx+1}/{len(chunks)} truncated even when chunked "
+                  f"— reduce target", flush=True)
         try:
             d = _parse_json(raw)
         except Exception as e:
             print(f"[llm] chunk {idx+1}/{len(chunks)} JSON parse failed: {e}", flush=True)
             continue
-        # metadata: first non-null wins for opening/bank/etc; closing = last seen
         for k in ("bank_name", "account_last4", "statement_period", "opening_balance"):
             if merged[k] is None and d.get(k) is not None:
                 merged[k] = d.get(k)
         if d.get("closing_balance") is not None:
             merged["closing_balance"] = d.get("closing_balance")
-        merged["transactions"].extend(d.get("transactions") or [])
+        for t in (d.get("transactions") or []):
+            key = _dedup_key(t)
+            if key in seen:
+                dupes += 1
+                continue
+            seen.add(key)
+            merged["transactions"].append(t)
 
-    print(f"[llm] merged {len(merged['transactions'])} transactions from "
-          f"{len(chunks)} chunks", flush=True)
+    print(f"[llm] merged {len(merged['transactions'])} unique transactions from "
+          f"{len(chunks)} chunks ({dupes} overlap dupes removed)", flush=True)
 
     class _U:
         input_tokens = in_tok

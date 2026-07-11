@@ -830,10 +830,168 @@ def emit_recurring_hint(category: str, merchant: str) -> bool:
     return category in RECURRING_HINT_CATEGORIES
 
 
+
+# Inconsistent bank / LLM transaction prefixes — stripped for FINGERPRINTING so
+# the same real transaction fingerprints identically regardless of how the parser
+# (template or LLM) happened to phrase the description this time.
+_FP_PREFIXES = [
+    "recurring debit card purchase", "recurring debit card", "debit card purchase",
+    "pos purchase", "web pmt recur-", "web pmt-", "web pmt",
+    "direct payment - purchase", "direct payment -", "direct payment",
+    "intl purch & adv fee", "intl purch", "ach tel", "ach web", "ach",
+    "checkcard", "check card", "point of sale", "pos", "purchase authorized on",
+    "purchase", "payment", "recurring", "debit card", "card",
+]
+
+
+# Broad national-brand alias map. Key = canonical name; values = substrings that
+# identify it after normalization. "contains" match. Grow from real data as new
+# duplicate-causing merchants show up.
+_MERCHANT_ALIASES = {
+    "amazon": ["amazon", "amzn", "amazon mktpl", "amazon mktp", "amazon.com", "amazon prime", "amzn mktp", "amazon web"],
+    "walmart": ["walmart", "wal-mart", "wal mart", "wm supercenter", "walmart.com"],
+    "target": ["target", "targ ", "targ.", "target.com", "target debit"],  # 'targ' handled specially below
+    "costco": ["costco"],
+    "kroger": ["kroger"],
+    "safeway": ["safeway"],
+    "trader joes": ["trader joe", "trader joes"],
+    "whole foods": ["whole foods", "wholefds", "wholefoods"],
+    "aldi": ["aldi"],
+    "publix": ["publix"],
+    "vons": ["vons"],
+    "albertsons": ["albertsons"],
+    "sprouts": ["sprouts"],
+    "starbucks": ["starbucks", "sbux"],
+    "dunkin": ["dunkin"],
+    "mcdonalds": ["mcdonald", "mcdonalds"],
+    "chipotle": ["chipotle"],
+    "chick-fil-a": ["chick-fil-a", "chick fil a", "chickfila"],
+    "taco bell": ["taco bell"],
+    "subway": ["subway"],
+    "wendys": ["wendy"],
+    "burger king": ["burger king"],
+    "dominos": ["domino"],
+    "pizza hut": ["pizza hut"],
+    "panera": ["panera"],
+    "dairy queen": ["dairy queen"],
+    "in-n-out": ["in-n-out", "in n out"],
+    "popeyes": ["popeye"],
+    "doordash": ["doordash", "dd doordash", "dd *doordash"],
+    "uber eats": ["uber eats", "ubereats"],
+    "grubhub": ["grubhub"],
+    "instacart": ["instacart"],
+    "uber": ["uber"],
+    "lyft": ["lyft"],
+    "netflix": ["netflix"],
+    "spotify": ["spotify"],
+    "hulu": ["hulu"],
+    "disney plus": ["disney plus", "disney+", "disneyplus"],
+    "hbo max": ["hbo max", "hbomax", "max.com"],
+    "youtube": ["youtube", "google youtube"],
+    "apple": ["apple.com", "apple com", "apple store", "apple one", "itunes", "apple cash", "applecard"],
+    "google": ["google", "goog "],
+    "microsoft": ["microsoft", "msft"],
+    "paypal": ["paypal", "pp *", "pp*"],
+    "venmo": ["venmo"],
+    "zelle": ["zelle"],
+    "cash app": ["cash app", "cashapp", "sq cash"],
+    "klarna": ["klarna"],
+    "afterpay": ["afterpay"],
+    "affirm": ["affirm"],
+    "cvs": ["cvs"],
+    "walgreens": ["walgreens", "walgreen"],
+    "rite aid": ["rite aid"],
+    "home depot": ["home depot", "homedepot"],
+    "lowes": ["lowe's", "lowes"],
+    "best buy": ["best buy", "bestbuy"],
+    "ikea": ["ikea"],
+    "wayfair": ["wayfair"],
+    "chevron": ["chevron"],
+    "shell": ["shell oil", "shell service", "shell "],
+    "exxon": ["exxon", "exxonmobil"],
+    "76": ["76 "],
+    "arco": ["arco"],
+    "bp": ["bp#", "bp gas"],
+    "mobil": ["mobil"],
+    "7-eleven": ["7-eleven", "7 eleven", "7eleven"],
+    "circle k": ["circle k"],
+    "petsmart": ["petsmart"],
+    "petco": ["petco"],
+    "chewy": ["chewy"],
+    "nike": ["nike"],
+    "adidas": ["adidas"],
+    "lululemon": ["lululemon"],
+    "old navy": ["old navy"],
+    "gap": ["gap.com", "gap store"],
+    "h&m": ["h&m", "h and m"],
+    "zara": ["zara"],
+    "macys": ["macy's", "macys"],
+    "nordstrom": ["nordstrom"],
+    "tj maxx": ["tj maxx", "tjmaxx", "t.j. maxx"],
+    "marshalls": ["marshalls"],
+    "ross": ["ross stores", "ross dress"],
+    "sephora": ["sephora"],
+    "ulta": ["ulta"],
+    "att": ["at&t", "att "],
+    "verizon": ["verizon"],
+    "tmobile": ["t-mobile", "tmobile"],
+    "comcast": ["comcast", "xfinity"],
+    "spectrum": ["spectrum"],
+    "pge": ["pg&e", "pgande", "pacific gas"],
+    "geico": ["geico"],
+    "progressive": ["progressive"],
+    "state farm": ["state farm"],
+    "allstate": ["allstate"],
+}
+
+def _fingerprint_merchant(description: str) -> str:
+    """Aggressively reduce a description to its core merchant tokens, so parse
+    variation doesn't change the fingerprint."""
+    import re as _re
+    if not description:
+        return ""
+    d = description.lower().strip()
+    # strip processor prefixes like "sq *", "tst*", "dd *"
+    d = _re.sub(r'^(?:sq|tst|toast|dd|dsh|paypal|pp|sp|wpy|gum|fs|ven(?:mo)?)\s*\*+\s*', '', d)
+    # strip the bank/LLM transaction-type prefixes (longest first; loop until stable)
+    changed = True
+    while changed:
+        changed = False
+        ds = d.lstrip(" -*#")
+        for pfx in _FP_PREFIXES:
+            if ds.startswith(pfx):
+                d = ds[len(pfx):]
+                changed = True
+                break
+    # drop long digit runs (phone numbers, store ids), stars, years
+    d = _re.sub(r'\d{4,}', '', d)
+    d = _re.sub(r'\b20\d{2}\b', '', d)
+    d = _re.sub(r'[*#]', ' ', d)
+    d = _re.sub(r'[^a-z0-9 ]', ' ', d)
+    d = _re.sub(r'\s+', ' ', d).strip()
+    # Step 2: alias map — "contains" match against national brands.
+    # Special short-token cases where truncation loses the trailing chars:
+    _stub = {"targ": "target", "amzn": "amazon", "sbux": "starbucks", "wmt": "walmart"}
+    if d.strip() in _stub:
+        return _stub[d.strip()]
+    for canonical, needles in _MERCHANT_ALIASES.items():
+        for n in needles:
+            if n in d:
+                return canonical
+    # Step 3: stem fallback for the long tail — first 2 significant tokens.
+    toks = [t for t in d.split() if len(t) > 1]
+    return " ".join(toks[:2])[:32].strip()
+
+
 def generate_fingerprint(bank: str, date: str, amount: float, description: str, ext_id: str = "", account: str = "") -> str:
-    id_part = f"|{ext_id}" if ext_id else ""
-    acct_part = f"|{account}" if account else ""
-    raw = f"{bank}{acct_part}|{date}|{round(float(amount),2)}|{description[:60].lower()}{id_part}"
+    # If the source gave a stable external id (OFX FITID), trust it outright.
+    if ext_id:
+        raw = f"{bank}|{account}|{ext_id}"
+        return hashlib.sha256(raw.encode()).hexdigest()
+    # Otherwise key on a PARSE-STABLE merchant stem so the same real transaction
+    # fingerprints identically no matter how the parser phrased the description.
+    stem = _fingerprint_merchant(description)
+    raw = f"{bank}|{account}|{date}|{round(float(amount),2)}|{stem}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
