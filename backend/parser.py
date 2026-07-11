@@ -1351,11 +1351,16 @@ def parse_statement(filename: str, file_bytes: bytes, bank_name: str = None, use
     except ValueError:
         raise
     except Exception as e:
-        hint = get_format_hint(bank_hint or '')
-        msg = f"Could not parse this file."
-        if hint:
-            msg += f" {hint}"
-        raise ValueError(msg)
+        # The template/structured parser threw (e.g. PNC's PDF layout). DON'T give
+        # up here — log the real error and fall through with an empty parse so the
+        # LLM fallback below gets a shot. This is exactly the case the fallback
+        # exists for: a file the templates can't read.
+        import traceback as _tb
+        print(f"[parse] {detected_type} parser raised for {filename}: "
+              f"{type(e).__name__}: {e}", flush=True)
+        print(_tb.format_exc(), flush=True)
+        raw, detected_bank = [], None
+        parse_mode = 'failed'
 
     final_bank = detected_bank or bank_hint or 'Unknown Bank'
 
