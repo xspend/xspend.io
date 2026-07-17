@@ -1,67 +1,113 @@
 # xspend
 
-Personal finance app built around awareness — not budgets, not shame.
+Personal finance analytics. Upload a bank statement, get categorized spending,
+cash-flow insights, and savings projects.
 
-**Status:** v1 in development · Phase 1 of dashboard redesign shipped · 2-month MVP target.
+**Live in beta with real users and real financial data.** Treat production accordingly.
 
-## Documentation
+| | |
+|---|---|
+| **Live app** | https://xspend.vercel.app |
+| **Backend API** | https://xspend-io.onrender.com |
+| **Board** | GitHub Projects: **Phase 1** |
 
-- **Product spec:** [`docs/PRODUCT.md`](docs/PRODUCT.md) — canonical product document (start here)
-- **Dashboard design:** [`docs/dashboard-redesign-v1.md`](docs/dashboard-redesign-v1.md) — design principles and Phase 1-4 plan
-- **Domain:** xspend.io
+---
 
-## Stack
+## Before you run anything
 
-- Frontend: React 18 + Vite (inline styles → migrating to Tailwind in v1)
-- Backend: FastAPI + SQLAlchemy (SQLite → migrating to Postgres in v1)
-- Async: Celery + Redis (planned for v1)
-- Auth: Clerk (replacing DIY JWT in v1)
-- Hosting: Render + Vercel (v1)
+### Local points at production
 
-## Features (current)
-
-- Statement parsing: CSV, Excel, PDF, OFX (Chase, Amex tested with real data)
-- 29-category canonical classification system with rule-based classifier
-- Membership-subscription detection (Walmart+, Amazon Prime, Apple One, etc.)
-- Discretionary vs Fixed spending split with ratio-aware microcopy
-- Hero KPIs: Spent · Top Category · Biggest Charge
-- Editorial insights panel
-- Projects — tag transactions by life event (a trip, a move, a wedding)
-- Multi-account aggregation with cross-account dedup
-
-## Setup
-
-### Backend
+`backend/.env` sets `DATABASE_URL` to the **Neon production database**. A local
+`uvicorn` reads and writes **live user data** unless you override it:
 
 ```bash
+DATABASE_URL="sqlite:///./financeai.db" uvicorn main:app --port 8000
+```
+
+This is one stray `DELETE` away from real damage to real people's financial records.
+
+### `main` deploys straight to production
+
+There is no CI and no staging. Push to `main`, and Render and Vercel deploy to live
+users within a couple of minutes. All work goes through pull requests.
+
+---
+
+## Quick start
+
+```bash
+# backend
 cd backend
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --port 8000 --reload
+DATABASE_URL="sqlite:///./financeai.db" uvicorn main:app --port 8000
 ```
 
-### Frontend
-
 ```bash
+# frontend, separate terminal
 cd frontend
 npm install
 npm run dev
 ```
 
-Frontend runs at `localhost:5173`, backend at `localhost:8000`.
+Frontend expects the backend on port 8000. See `frontend/src/lib/config.js`.
 
-## Architecture
+---
 
-See `docs/PRODUCT.md` §6 for the high-level diagram.
+## Docs
 
-Key code:
-- `backend/main.py` — FastAPI endpoints
-- `backend/parser.py` — statement parsing + bank detection
-- `backend/classifier.py` — rule-based categorization
-- `backend/fixed_classifier.py` — recurring/fixed detection + merchant display cleanup
-- `backend/insights.py` — insights generation
-- `frontend/src/pages/Dashboard.jsx` — main dashboard
+| | |
+|---|---|
+| [`docs/ONBOARDING.md`](docs/ONBOARDING.md) | **Start here.** What the product is, setup, how we work, conventions. |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The system. File map, data flow, core logic, thresholds, landmines, bug history, open issues. |
+| [`docs/TASKS_PHASE1.md`](docs/TASKS_PHASE1.md) | The current milestone. |
 
-## Contributing
+---
 
-This is a private project. Engineers: see `docs/PRODUCT.md` for scope, principles, and the 8-week roadmap.
+## Layout
+
+```
+backend/          FastAPI + SQLAlchemy
+  main.py           app, endpoints, upload flow, dedup loop
+  parser.py         file routing, bank detection, template parsing
+  llm_fallback.py   LLM extraction for banks with no template
+  classifier.py     fingerprinting, merchant canonicalization
+  fixed_classifier.py   fixed vs variable, recurrence
+  insights.py       dashboard insights
+  ai_chat.py        the five templated insight prompts
+  credit_engine.py  card credits and rewards, net category spend
+  models.py         DB models
+  database.py       connection and session
+  auth.py           authentication
+  migrate.py        migrations
+
+frontend/         React + Vite + Tailwind
+  src/pages/        Dashboard, Upload, Transactions, Chat, Goals, Settings, ...
+
+docs/             see above
+```
+
+`ARCHITECTURE.md` section 3 has the full file-ownership map.
+
+---
+
+## Stack
+
+| | |
+|---|---|
+| Frontend | React, Vite, Tailwind, deployed on **Vercel** |
+| Backend | FastAPI, SQLAlchemy, deployed on **Render** (Pro) |
+| Database | **Neon** / Postgres in production, SQLite locally |
+| PDF extraction | pdfplumber |
+| LLM parsing fallback | Anthropic API, Claude Haiku 4.5 |
+
+---
+
+## Status
+
+**Current milestone:** Phase 1, multi-user isolation and deduplication correctness.
+See [`docs/TASKS_PHASE1.md`](docs/TASKS_PHASE1.md) and the Phase 1 board.
+
+**Known gaps:** no automated tests, no CI, uploads run synchronously and time out on
+large statements even though they succeed. `ARCHITECTURE.md` section 9 has the full
+list of open issues.
