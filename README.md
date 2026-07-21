@@ -50,6 +50,12 @@ npm install
 npm run dev
 ```
 
+```bash
+# backend tests (throwaway file-based SQLite, never touches a real DB)
+cd backend
+pytest
+```
+
 Frontend expects the backend on port 8000. See `frontend/src/lib/config.js`.
 
 ---
@@ -67,25 +73,35 @@ Frontend expects the backend on port 8000. See `frontend/src/lib/config.js`.
 ## Layout
 
 ```
-backend/          FastAPI + SQLAlchemy
-  main.py           app, endpoints, upload flow, dedup loop
-  parser.py         file routing, bank detection, template parsing
-  llm_fallback.py   LLM extraction for banks with no template
-  classifier.py     fingerprinting, merchant canonicalization
-  fixed_classifier.py   fixed vs variable, recurrence
-  insights.py       dashboard insights
-  ai_chat.py        the five templated insight prompts
-  credit_engine.py  card credits and rewards, net category spend
-  models.py         DB models
-  database.py       connection and session
-  auth.py           authentication
-  migrate.py        migrations
+backend/
+  main.py                     app, ALL endpoints, upload flow, dedup loop
+  app/
+    db/database.py             connection and session
+    models/models.py           DB models — single source of truth for the schema.
+                                Every PK is an autoincrement Integer; every reference
+                                column is a real ForeignKey (mostly ON DELETE CASCADE
+                                from users).
+    auth/security.py           JWT + bcrypt
+    auth/deps.py                get_current_user (int user id; see below)
+    parsers/parser.py          file routing, bank detection, template parsing
+    parsers/llm_fallback.py    LLM extraction for banks with no template
+    services/classifier.py     fingerprinting, merchant canonicalization
+    services/fixed_classifier.py   fixed vs variable, recurrence
+    services/insights.py       dashboard insights
+    services/ai_chat.py        the five templated insight prompts
+    services/credit_engine.py  card credits and rewards, net category spend
+  alembic/          Alembic migrations (baseline, dedup, UUID->int PKs)
+  tests/            pytest suite
 
 frontend/         React + Vite + Tailwind
   src/pages/        Dashboard, Upload, Transactions, Chat, Goals, Settings, ...
 
 docs/             see above
 ```
+
+`get_current_user` returns an `int` (previously a UUID string). A token issued before
+the UUID→integer PK migration carries a string `sub` and is rejected with 401 — that
+migration required every logged-in user to sign in again.
 
 `ARCHITECTURE.md` section 3 has the full file-ownership map.
 
@@ -108,6 +124,7 @@ docs/             see above
 **Current milestone:** Phase 1, multi-user isolation and deduplication correctness.
 See [`docs/TASKS_PHASE1.md`](docs/TASKS_PHASE1.md) and the Phase 1 board.
 
-**Known gaps:** no automated tests, no CI, uploads run synchronously and time out on
-large statements even though they succeed. `ARCHITECTURE.md` section 9 has the full
-list of open issues.
+**Known gaps:** no CI yet, uploads run synchronously and time out on large statements
+even though they succeed. A backend `pytest` suite now covers auth, the classifier,
+parser primitives, dedup/fingerprinting, credit-engine isolation, and the core API
+endpoints. `ARCHITECTURE.md` section 9 has the full list of open issues.

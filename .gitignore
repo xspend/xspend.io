@@ -61,3 +61,7 @@ frontend/flex
 # More backup patterns
 *.backup-*
 *-backup-*
+
+
+.claude/
+CLAUDE.md
