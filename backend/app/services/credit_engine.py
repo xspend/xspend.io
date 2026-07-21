@@ -156,17 +156,26 @@ def find_matching_expense(credit_desc, credit_amount, credit_info, expenses, sta
 def run_credit_matching(db, user_id=None):
     import sqlalchemy as _sa
 
+    # Multi-user isolation: never match one user's credits against another user's
+    # expenses. Scope every read/write to user_id. (When user_id is None, e.g. a
+    # legacy single-user/dev call, fall back to unscoped — but production callers
+    # must always pass user_id.)
+    _uscope = " AND user_id = :u" if user_id is not None else ""
+    _uparams = {"u": user_id} if user_id is not None else {}
+
     credits = db.execute(_sa.text(
-        "SELECT transaction_id, description, amount, transaction_date FROM transactions WHERE transaction_type = 'card_credit'"
-    )).fetchall()
+        "SELECT id, description, amount, transaction_date FROM transactions "
+        "WHERE transaction_type = 'card_credit'" + _uscope
+    ), _uparams).fetchall()
 
     expenses_raw = db.execute(_sa.text(
-        'SELECT transaction_id, description, amount, transaction_date, category, is_fixed, transaction_type FROM transactions WHERE amount < 0 AND exclusion_reason IS NULL'
-    )).fetchall()
+        "SELECT id, description, amount, transaction_date, category, is_fixed, transaction_type "
+        "FROM transactions WHERE amount < 0 AND exclusion_reason IS NULL" + _uscope
+    ), _uparams).fetchall()
 
     expenses = [
         {
-            'transaction_id': r[0],
+            'id': r[0],
             'description': r[1],
             'amount': r[2],
             'transaction_date': r[3],
@@ -217,7 +226,7 @@ def run_credit_matching(db, user_id=None):
             unapplied = round(credit_amt - applied, 2)
             offset_records.append({
                 'credit_transaction_id': tx_id,
-                'matched_expense_id': matched_exp['transaction_id'],
+                'matched_expense_id': matched_exp['id'],
                 'matched_category': credit_info.get('target_category') or matched_exp.get('category'),
                 'credit_type': credit_info['credit_type'],
                 'eligible_for_matching': 1,
@@ -243,7 +252,11 @@ def run_credit_matching(db, user_id=None):
                 'user_id': user_id,
             })
 
-    db.execute(_sa.text('UPDATE credit_offsets SET is_active = 0'))
+    # Deactivate only THIS user's prior offsets, not everyone's.
+    db.execute(
+        _sa.text("UPDATE credit_offsets SET is_active = 0" + (" WHERE user_id = :u" if user_id is not None else "")),
+        _uparams,
+    )
 
     for rec in offset_records:
         db.execute(_sa.text(
@@ -254,16 +267,25 @@ def run_credit_matching(db, user_id=None):
     return offset_records
 
 
-def get_net_category_spend(db, period: str) -> Dict:
+def get_net_category_spend(db, period: str, user_id=None) -> Dict:
     import sqlalchemy as _sa
 
+    # Scope to a single user so one user's totals never include another's rows.
+    _uscope = " AND user_id = :u" if user_id is not None else ""
+    params = {'period': period}
+    if user_id is not None:
+        params['u'] = user_id
+
     expenses = db.execute(_sa.text(
-        "SELECT category, amount, transaction_id, is_fixed FROM transactions WHERE transaction_type = 'expense' AND amount < 0 AND exclusion_reason IS NULL AND substr(transaction_date, 1, 7) = :period"
-    ), {'period': period}).fetchall()
+        "SELECT category, amount, id, is_fixed FROM transactions "
+        "WHERE transaction_type = 'expense' AND amount < 0 AND exclusion_reason IS NULL "
+        "AND substr(transaction_date, 1, 7) = :period" + _uscope
+    ), params).fetchall()
 
     offsets = db.execute(_sa.text(
-        'SELECT matched_category, matched_expense_id, applied_amount FROM credit_offsets WHERE statement_period = :period AND is_active = 1 AND applied_amount > 0'
-    ), {'period': period}).fetchall()
+        "SELECT matched_category, matched_expense_id, applied_amount FROM credit_offsets "
+        "WHERE statement_period = :period AND is_active = 1 AND applied_amount > 0" + _uscope
+    ), params).fetchall()
 
     category_map = {}
     for cat, amount, tx_id, is_fixed in expenses:

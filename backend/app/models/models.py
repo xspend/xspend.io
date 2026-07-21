@@ -1,15 +1,12 @@
-from sqlalchemy import Column, String, Float, Date, DateTime, Boolean, Text, Integer, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Float, Date, DateTime, Boolean, Text, Integer, ForeignKey, UniqueConstraint, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from database import Base
-import uuid
+from app.db import Base
 
-def gen_uuid():
-    return str(uuid.uuid4())
 
 class User(Base):
     __tablename__ = "users"
-    user_id = Column(String, primary_key=True, default=gen_uuid)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     full_name = Column(String(150))
     email = Column(String(255), unique=True, nullable=True)
     password_hash = Column(String(255), nullable=True)
@@ -27,13 +24,17 @@ class User(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
+    accounts = relationship("Account", back_populates="user")
+    uploaded_files = relationship("UploadedFile", back_populates="user")
+    transactions = relationship("Transaction", back_populates="user")
+
 # Legacy alias
 UserProfile = User
 
 class Account(Base):
     __tablename__ = "accounts"
-    account_id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(String, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     account_name = Column(String(150))
     account_type = Column(String(50), default="checking")
     institution_name = Column(String(150), nullable=True)
@@ -41,11 +42,14 @@ class Account(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=func.now())
 
+    user = relationship("User", back_populates="accounts")
+    transactions = relationship("Transaction", back_populates="account")
+
 class UploadedFile(Base):
     __tablename__ = "uploaded_files"
-    uploaded_file_id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(String, nullable=True)
-    account_id = Column(String, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
     file_name = Column(String(255))
     file_type = Column(String(30))
     source_type = Column(String(50), nullable=True)
@@ -58,10 +62,13 @@ class UploadedFile(Base):
     uploaded_at = Column(DateTime, default=func.now())
     processed_at = Column(DateTime, nullable=True)
 
+    user = relationship("User", back_populates="uploaded_files")
+    transactions = relationship("Transaction", back_populates="uploaded_file")
+
 class Category(Base):
     __tablename__ = "categories"
-    category_id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(String, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     category_name = Column(String(100), nullable=False)
     category_group = Column(String(50), default="expense")
     is_system_default = Column(Boolean, default=False)
@@ -72,7 +79,7 @@ class Category(Base):
 class Project(Base):
     __tablename__ = "projects"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     name = Column(String(150), nullable=False)
     type = Column(String(30), default="custom")  # savings | debt | custom
     target_amount = Column(Float, nullable=True)
@@ -91,52 +98,48 @@ class Project(Base):
 Goal = Project
 
 class Transaction(Base):
+    """A single parsed transaction.
+
+    `id` is the integer primary key (promoted from a plain unique column to the
+    real autoincrement PK — see Alembic `uuid_to_integer_pks`). The former UUID
+    `transaction_id` column is gone; every reference (credit_offsets, API path
+    params) now points at `id`.
+
+    Column set was deduplicated (see Alembic `dedup_transaction_columns`): the many
+    write-only / duplicate columns that used to shadow these canonical fields
+    (description_raw/clean, currency_code, is_user_edited, ...) were dropped. Keep
+    writes going only to the canonical column below.
+    """
     __tablename__ = "transactions"
-    transaction_id = Column(String, primary_key=True, default=gen_uuid)
-    id = Column(Integer, unique=True, autoincrement=True)
-    user_id = Column(String, nullable=True)
-    account_id = Column(String, nullable=True)
-    uploaded_file_id = Column(String, nullable=True)
-    external_transaction_id = Column(String, nullable=True)
-    raw_date = Column(String, nullable=True)
-    raw_description = Column(String, nullable=True)
-    raw_amount = Column(String, nullable=True)
-    raw_category = Column(String, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    uploaded_file_id = Column(Integer, ForeignKey("uploaded_files.id"), nullable=True)
+    external_transaction_id = Column(String, nullable=True)  # OFX FITID, used for dedup
+    # Canonical value columns
     transaction_date = Column(Date, nullable=True)
-    posted_date = Column(Date, nullable=True)
     amount = Column(Float, nullable=True)
-    currency_code = Column(String(3), default="USD")
     currency = Column(String(3), default="USD")
-    description_raw = Column(String(500), nullable=True)
-    description_clean = Column(String(255), nullable=True)
     description = Column(String, nullable=True)
-    original_description = Column(String, nullable=True)
-    merchant_name = Column(String(255), nullable=True)
-    bank_name_raw = Column(String(255), nullable=True)
     bank_source = Column(String, default="Unknown Bank")
     account_name = Column(String, nullable=True)
     transaction_type = Column(String(50), default="unknown")
-    category_id = Column(String, nullable=True)
     category = Column(String, default="Other")
-    subcategory = Column(String, nullable=True)
     notes = Column(String(500), nullable=True)
+    # Project tagging
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     project = relationship("Project", back_populates="transactions")
-    project_review_pending = Column(Boolean, default=False)  # auto-added, awaiting review
-    fingerprint = Column(String, index=True, nullable=True)  # NOT globally unique — see __table_args__ (unique per user)
-    fingerprint_hash = Column(String(255), nullable=True)
+    # Dedup: fingerprint is unique PER USER, never global — two users may share a txn.
+    fingerprint = Column(String, index=True, nullable=True)
     __table_args__ = (UniqueConstraint('fingerprint', 'user_id', name='uq_txn_fingerprint_user'),)
-    is_duplicate = Column(Boolean, default=False)
+    # Review / classification state
     is_pending = Column(Boolean, default=False)
-    status = Column(String, default="posted")
-    is_user_edited = Column(Boolean, default=False)
-    is_edited = Column(Boolean, default=False)
-    review_status = Column(String(30), default="pending_review")
     needs_review = Column(Boolean, default=False)
+    is_edited = Column(Boolean, default=False)
     exclusion_reason = Column(String(100), nullable=True)
-    classification_confidence = Column(String, default="low")
-    classification_source = Column(String, default="auto")
+    classification_confidence = Column(String, default="low")  # echoed to UI
     import_source = Column(String, nullable=True)
+    # Fixed-vs-variable expense signals
     is_fixed = Column(Boolean, default=False)
     fixed_confidence = Column(Float, default=0.0)
     fixed_source = Column(String, default="auto")
@@ -144,10 +147,14 @@ class Transaction(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
+    user = relationship("User", back_populates="transactions")
+    account = relationship("Account", back_populates="transactions")
+    uploaded_file = relationship("UploadedFile", back_populates="transactions")
+
 class TransactionRule(Base):
     __tablename__ = "transaction_rules"
-    rule_id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(String, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     match_field = Column(String(50), default="description")
     match_operator = Column(String(30), default="contains")
     match_value = Column(String(255), nullable=False)
@@ -167,7 +174,7 @@ class BudgetHistory(Base):
     amount     = Column(Float, nullable=False)
     month      = Column(String(7), nullable=False)  # "2026-03"
     created_at = Column(DateTime, default=func.now())
-    user_id    = Column(String, nullable=True)
+    user_id    = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
 
 class ManualFixedExpense(Base):
     __tablename__ = "manual_fixed_expenses"
@@ -176,7 +183,7 @@ class ManualFixedExpense(Base):
     amount     = Column(Float, nullable=False)
     frequency  = Column(Text, default="monthly")
     created_at = Column(Text, server_default=func.now())
-    user_id    = Column(String, nullable=True)
+    user_id    = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
 
 def seed_default_categories(db):
     if db.query(Category).filter(Category.is_system_default == True).count() > 0:
@@ -205,7 +212,6 @@ def seed_default_categories(db):
     ]
     for i,(name,group) in enumerate(defaults):
         db.add(Category(
-            category_id=gen_uuid(),
             category_name=name,
             category_group=group,
             is_system_default=True,
@@ -221,6 +227,57 @@ class ChatLog(Base):
     Doubles as analytics: which prompts do people actually use?"""
     __tablename__ = "chat_log"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     prompt_id = Column(String(50), nullable=False)
     created_at = Column(DateTime, default=func.now())
+
+
+class CreditOffset(Base):
+    """Card statement credits/rewards netted against expenses. Previously created
+    via raw `CREATE TABLE` in database.py; now the single source of truth. Existing
+    query code accesses this table via raw SQL — that still works against this schema.
+    `credit_transaction_id`/`matched_expense_id` point at `transactions.id` (integer).
+    """
+    __tablename__ = "credit_offsets"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    credit_transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False)
+    matched_expense_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    matched_category = Column(String(100), nullable=True)
+    credit_type = Column(String(50), nullable=True)
+    eligible_for_matching = Column(Integer, default=1)
+    applied_amount = Column(Numeric(12, 2), nullable=False)
+    unapplied_amount = Column(Numeric(12, 2), nullable=True)
+    match_confidence = Column(String(20), nullable=True)
+    match_method = Column(String(50), nullable=True)
+    statement_period = Column(String(7), nullable=True)
+    is_active = Column(Integer, default=1)
+    matched_by = Column(String(20), default="system")
+    created_at = Column(Text, nullable=True)
+    updated_at = Column(Text, nullable=True)
+
+
+class MerchantRule(Base):
+    """User-correction learning rules (merchant -> category / fixed). Was defined
+    as raw DDL in BOTH database.py and migrate.py (the migrate.py copy was missing
+    11 columns). Consolidated here as the single source of truth. Existing query
+    code accesses this table via raw SQL — that still works against this schema.
+    """
+    __tablename__ = "merchant_rules"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    merchant_keyword = Column(Text, nullable=False)
+    is_fixed = Column(Integer, nullable=False)
+    user_confirmed = Column(Integer, default=0)
+    confidence = Column(Float, default=0.0)
+    created_at = Column(Text, server_default=func.now())
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    match_field = Column(Text, default="merchant")
+    match_value = Column(Text, nullable=True)
+    match_type = Column(Text, default="contains")
+    transaction_type = Column(Text, nullable=True)
+    category = Column(Text, nullable=True)
+    priority = Column(Integer, default=0)
+    source = Column(Text, default="system_default")
+    confidence_override = Column(Float, nullable=True)
+    is_active = Column(Integer, default=1)
+    updated_at = Column(Text, nullable=True)

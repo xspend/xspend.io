@@ -494,7 +494,6 @@ def classify_all_transactions(transactions: list, merchant_rules: dict = None) -
         if merchant_rules and merchant_key[:8] in merchant_rules:
             user_decision = merchant_rules[merchant_key[:8]]
             results.append({
-                'transaction_id': tx.get('transaction_id'),
                 'id': tx.get('id'),
                 'is_fixed': user_decision,
                 'confidence': 1.0,
@@ -503,7 +502,6 @@ def classify_all_transactions(transactions: list, merchant_rules: dict = None) -
             })
             continue
         result = classify_transaction(tx, expense_txs, merchant_index, all_months)
-        result['transaction_id'] = tx.get('transaction_id')
         result['id'] = tx.get('id')
         results.append(result)
     return results

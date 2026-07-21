@@ -16,7 +16,7 @@ try:
 except ImportError:
     HAS_OFX = False
 from datetime import datetime
-from classifier import classify_transaction, generate_fingerprint, normalize_description
+from app.services.classifier import classify_transaction, generate_fingerprint, normalize_description
 # ai.py removed — Claude fallback disabled
 def parse_statement_with_claude(text, filename, bank): return [], bank
 
@@ -828,7 +828,7 @@ def parse_pdf_structured(file_bytes: bytes, bank: str) -> tuple:
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            from pdf_parser_xy import parse_pdf_xy
+            from app.parsers.pdf_parser_xy import parse_pdf_xy
         bank_lower = (bank or '').lower()
         if any(k in bank_lower for k in ['amex','american express','chase','bofa','bank of america','wells fargo','wellsfargo','macys','macys-citi','macy','discover']):
             txs, count = parse_pdf_xy(file_bytes, bank)
@@ -1207,7 +1207,7 @@ def _rows_from_llm_fallback(file_bytes, filename):
     Returns ([], None, False) if the fallback can't handle the file."""
     import tempfile, os as _os
     try:
-        import llm_fallback as _llm
+        import app.parsers.llm_fallback as _llm
     except Exception as _e:
         print(f"[llm_fallback] module not importable: {_e}")
         return [], None, False
