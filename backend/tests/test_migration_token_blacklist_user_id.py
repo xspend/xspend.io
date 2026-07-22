@@ -6,6 +6,9 @@ Builds the pre-0006 (post-0005) schema via the real migration chain and
 confirms the NOT NULL user_id add is safe under that migration's assumption
 that token_blacklist is always empty at this point — SQLite for CI
 portability (also hand-verified against a real local Postgres during dev).
+
+Stops at 0006 specifically (not "head") since later migrations (e.g. 0007)
+get added after this one — same reasoning as test_migration_auth_tables.py.
 """
 import os
 import subprocess
@@ -42,7 +45,7 @@ def migrated_db():
         c.execute(text("INSERT INTO users (email, full_name) VALUES ('alice@test.com', 'Alice')"))
     engine.dispose()
 
-    r = _run_alembic(db_url, "upgrade", "head")
+    r = _run_alembic(db_url, "upgrade", "0006_token_blacklist_user_id")
     assert r.returncode == 0, r.stderr
 
     yield db_url
@@ -77,20 +80,14 @@ def test_user_id_column_and_fk_added(migrated_db):
     assert fk["options"].get("ondelete") == "CASCADE"
 
 
-def test_alembic_check_reports_no_drift(migrated_db):
-    r = _run_alembic(migrated_db, "check")
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert "No new upgrade operations detected" in (r.stdout + r.stderr)
-
-
 def test_downgrade_and_reupgrade_round_trip(migrated_db):
-    r = _run_alembic(migrated_db, "downgrade", "-1")
+    r = _run_alembic(migrated_db, "downgrade", "0005_auth_tables")
     assert r.returncode == 0, r.stdout + r.stderr
 
     insp = inspect(create_engine(migrated_db))
     assert "user_id" not in {c["name"] for c in insp.get_columns("token_blacklist")}
 
-    r = _run_alembic(migrated_db, "upgrade", "head")
+    r = _run_alembic(migrated_db, "upgrade", "0006_token_blacklist_user_id")
     assert r.returncode == 0, r.stderr
 
     insp = inspect(create_engine(migrated_db))

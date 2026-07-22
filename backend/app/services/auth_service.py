@@ -4,6 +4,7 @@ app/core/security.py (hashing/JWTs) and app/services/email_service.py
 (sending mail) — the router just calls these and translates AuthError into
 the right HTTP status.
 """
+import math
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
@@ -16,6 +17,9 @@ from app.repositories import auth_repository
 from . import email_service
 
 EMAIL_VERIFICATION_EXPIRE_HOURS = 24
+OTP_EXPIRE_MINUTES = 10
+MAX_OTP_ATTEMPTS = 5
+OTP_LOCKOUT_MINUTES = 10
 
 
 class AuthError(Exception):
@@ -56,11 +60,25 @@ class InvalidRefreshToken(AuthError):
     status_code = 401
 
 
+class InvalidOtp(AuthError):
+    status_code = 401
+
+
+class TooManyOtpAttempts(AuthError):
+    status_code = 429
+
+
 def _create_verification_token(db: Session, user: User) -> str:
     token = secrets.token_urlsafe(32)
     expires_at = datetime.utcnow() + timedelta(hours=EMAIL_VERIFICATION_EXPIRE_HOURS)
     auth_repository.create_verification_token(db, user.id, token, expires_at)
     return token
+
+
+def _lockout_message(locked_until: datetime) -> str:
+    remaining_seconds = (locked_until - datetime.utcnow()).total_seconds()
+    remaining_minutes = max(1, math.ceil(remaining_seconds / 60))
+    return f"Too many incorrect attempts. Try again in {remaining_minutes} minute(s)."
 
 
 def _issue_token_pair(db: Session, user: User) -> Tuple[str, str]:
@@ -114,13 +132,57 @@ async def resend_verification(db: Session, email: str) -> None:
     await email_service.send_verification_email(user.email, token, user.id)
 
 
-def login(db: Session, email: str, password: str) -> Tuple[str, str, User]:
+async def login(db: Session, email: str, password: str) -> str:
+    """Checks email+password (factor 1), then emails a fresh OTP (factor 2)
+    and returns the login_token the client must present, along with that
+    OTP, to verify_login_otp(). No access/refresh tokens are issued here —
+    that only happens once the OTP checks out.
+
+    Only one challenge exists per user at a time — a fresh login overwrites
+    whatever OTP was already pending. If the previous challenge was locked
+    out from too many wrong attempts, login is refused until that lock
+    expires, so a wrong-password guesser can't just call /login again to
+    reset their own OTP attempt counter."""
     email = email.lower().strip()
     user = auth_repository.get_user_by_email(db, email)
     if not user or not security.verify_password(password, user.password_hash or ""):
         raise InvalidCredentials("Invalid email or password")
     if not user.email_verified:
         raise EmailNotVerified("Please verify your email before logging in")
+
+    existing = auth_repository.get_login_otp_by_user_id(db, user.id)
+    if existing and existing.locked_until and existing.locked_until > datetime.utcnow():
+        raise TooManyOtpAttempts(_lockout_message(existing.locked_until))
+
+    login_token = secrets.token_urlsafe(32)
+    otp = security.generate_otp()
+    expires_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRE_MINUTES)
+    auth_repository.upsert_login_otp(db, user.id, login_token, security.hash_password(otp), expires_at)
+    await email_service.send_login_otp_email(user.email, otp)
+    return login_token
+
+
+def verify_login_otp(db: Session, login_token: str, otp: str) -> Tuple[str, str, User]:
+    row = auth_repository.get_login_otp_by_token(db, login_token)
+    if not row or row.used:
+        raise InvalidOtp("Invalid or expired login attempt")
+    if row.locked_until and row.locked_until > datetime.utcnow():
+        raise TooManyOtpAttempts(_lockout_message(row.locked_until))
+    if row.expires_at < datetime.utcnow():
+        raise InvalidOtp("This code has expired — please log in again")
+    if not security.verify_password(otp, row.otp_hash):
+        auth_repository.increment_login_otp_attempts(db, row)
+        if row.attempts >= MAX_OTP_ATTEMPTS:
+            locked_until = datetime.utcnow() + timedelta(minutes=OTP_LOCKOUT_MINUTES)
+            auth_repository.lock_login_otp(db, row, locked_until)
+            raise TooManyOtpAttempts(_lockout_message(locked_until))
+        raise InvalidOtp("Incorrect code")
+
+    user = auth_repository.get_user_by_id(db, row.user_id)
+    if not user:
+        raise InvalidOtp("Invalid or expired login attempt")
+
+    auth_repository.mark_login_otp_used(db, row)
     access_token, refresh_token = _issue_token_pair(db, user)
     return access_token, refresh_token, user
 

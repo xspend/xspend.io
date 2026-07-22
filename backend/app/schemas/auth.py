@@ -47,6 +47,14 @@ class VerifyEmailRequest(BaseModel):
     token: str
     eid: Optional[str] = None
 
+class LoginOtpRequiredResponse(BaseModel):
+    message: str
+    login_token: str
+
+class VerifyOtpRequest(BaseModel):
+    login_token: str
+    otp: str
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 

@@ -29,6 +29,30 @@ class RefreshToken(Base):
     revoked = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=func.now())
 
+class LoginOtp(Base):
+    """A pending 2FA challenge: login already checked email+password, now
+    waiting on the emailed OTP. `login_token` is what the client holds
+    between the two requests (POST /auth/login -> POST /auth/verify-otp) —
+    the OTP alone isn't enough without it, so guessing OTPs requires having
+    already passed the password check for that specific login attempt.
+    `otp_hash` is bcrypt via the same hash_password/verify_password used for
+    real passwords — never store the OTP itself. `attempts` caps brute-force
+    guesses at a fixed limit (see auth_service.MAX_OTP_ATTEMPTS); once hit,
+    `locked_until` blocks both retrying this OTP and starting a fresh login
+    for OTP_LOCKOUT_MINUTES. `user_id` is unique — one pending/most-recent
+    challenge per user, not one row per login attempt; a new login()
+    overwrites the existing row instead of piling up old ones."""
+    __tablename__ = "login_otps"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    login_token = Column(String(64), unique=True, nullable=False, index=True)
+    otp_hash = Column(String(255), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, nullable=False, default=False)
+    attempts = Column(Integer, nullable=False, default=0)
+    locked_until = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+
 class TokenBlacklist(Base):
     """Access-token `jti`s revoked at logout. A row here makes that specific
     access token rejected for the rest of its natural expiry — cheap to check

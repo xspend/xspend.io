@@ -1,4 +1,5 @@
 import base64
+import secrets
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
@@ -70,3 +71,8 @@ def decode_id(encoded: str) -> Optional[int]:
         return int(base64.urlsafe_b64decode(padded).decode())
     except (ValueError, UnicodeDecodeError):
         return None
+
+def generate_otp() -> str:
+    """A 6-digit numeric OTP for login 2FA. secrets.randbelow, not random —
+    this gates access to a real session, so it needs to be unguessable."""
+    return f"{secrets.randbelow(1_000_000):06d}"

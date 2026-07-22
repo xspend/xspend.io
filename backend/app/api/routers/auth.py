@@ -7,7 +7,8 @@ from app.models import User
 from app.services import auth_service
 from app.schemas.auth import (
     SignupRequest, SignupResponse,
-    LoginRequest, LoginResponse,
+    LoginRequest, LoginOtpRequiredResponse,
+    VerifyOtpRequest, LoginResponse,
     VerifyEmailRequest, MessageResponse,
     ResendVerificationRequest,
     RefreshRequest, TokenPairResponse,
@@ -58,10 +59,24 @@ async def resend_verification(data: ResendVerificationRequest, db: Session = Dep
     return MessageResponse(message="Verification email sent.")
 
 
-@router.post("/login", response_model=LoginResponse, summary="Log in and get an access/refresh token pair")
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+@router.post("/login", response_model=LoginOtpRequiredResponse,
+             summary="Log in with email+password (step 1 of 2) — emails an OTP")
+async def login(data: LoginRequest, db: Session = Depends(get_db)):
     try:
-        access_token, refresh_token, user = auth_service.login(db, data.email, data.password)
+        login_token = await auth_service.login(db, data.email, data.password)
+    except auth_service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return LoginOtpRequiredResponse(
+        message="Check your email for a login code.",
+        login_token=login_token,
+    )
+
+
+@router.post("/verify-otp", response_model=LoginResponse,
+             summary="Verify the emailed OTP (step 2 of 2) — returns an access/refresh token pair")
+def verify_otp(data: VerifyOtpRequest, db: Session = Depends(get_db)):
+    try:
+        access_token, refresh_token, user = auth_service.verify_login_otp(db, data.login_token, data.otp)
     except auth_service.AuthError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     return LoginResponse(

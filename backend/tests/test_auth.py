@@ -5,6 +5,7 @@ from app.core.security import (
     decode_id,
     decode_token,
     encode_id,
+    generate_otp,
     hash_password,
     verify_password,
 )
@@ -64,3 +65,10 @@ def test_encode_id_roundtrip():
 
 def test_decode_id_garbage_returns_none():
     assert decode_id("not-valid-base64!!!") is None
+
+
+def test_generate_otp_is_six_digits():
+    for _ in range(20):
+        otp = generate_otp()
+        assert len(otp) == 6
+        assert otp.isdigit()

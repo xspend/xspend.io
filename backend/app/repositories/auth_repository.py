@@ -1,13 +1,14 @@
 """All SQLAlchemy queries for the auth flow. No business rules here — just
-CRUD against User, EmailVerificationToken, RefreshToken, and TokenBlacklist.
-app/services/auth_service.py is the caller; it decides what the results mean.
+CRUD against User, EmailVerificationToken, RefreshToken, TokenBlacklist, and
+LoginOtp. app/services/auth_service.py is the caller; it decides what the
+results mean.
 """
 from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import User, EmailVerificationToken, RefreshToken, TokenBlacklist
+from app.models import User, EmailVerificationToken, RefreshToken, TokenBlacklist, LoginOtp
 
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
@@ -94,4 +95,45 @@ def blacklist_jti(db: Session, jti: str, expires_at: datetime, user_id: int) -> 
     if is_jti_blacklisted(db, jti):
         return
     db.add(TokenBlacklist(user_id=user_id, jti=jti, expires_at=expires_at))
+    db.commit()
+
+
+def get_login_otp_by_user_id(db: Session, user_id: int) -> Optional[LoginOtp]:
+    return db.query(LoginOtp).filter(LoginOtp.user_id == user_id).first()
+
+
+def get_login_otp_by_token(db: Session, login_token: str) -> Optional[LoginOtp]:
+    return db.query(LoginOtp).filter(LoginOtp.login_token == login_token).first()
+
+
+def upsert_login_otp(db: Session, user_id: int, login_token: str, otp_hash: str, expires_at: datetime) -> LoginOtp:
+    """One row per user (see the unique constraint on user_id) — a fresh
+    login overwrites whatever challenge, used or not, was already there."""
+    row = get_login_otp_by_user_id(db, user_id)
+    if row:
+        row.login_token = login_token
+        row.otp_hash = otp_hash
+        row.expires_at = expires_at
+        row.used = False
+        row.attempts = 0
+        row.locked_until = None
+    else:
+        row = LoginOtp(user_id=user_id, login_token=login_token, otp_hash=otp_hash, expires_at=expires_at)
+        db.add(row)
+    db.commit()
+    return row
+
+
+def increment_login_otp_attempts(db: Session, row: LoginOtp) -> None:
+    row.attempts += 1
+    db.commit()
+
+
+def lock_login_otp(db: Session, row: LoginOtp, locked_until: datetime) -> None:
+    row.locked_until = locked_until
+    db.commit()
+
+
+def mark_login_otp_used(db: Session, row: LoginOtp) -> None:
+    row.used = True
     db.commit()

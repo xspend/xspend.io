@@ -60,3 +60,16 @@ async def send_verification_email(to_email: str, token: str, user_id: int) -> No
         subtype=MessageType.html,
     )
     await _fm.send_message(message, template_name="verify_email.html")
+
+
+async def send_login_otp_email(to_email: str, otp: str) -> None:
+    if _fm is None:
+        print(f"[email] SMTP not configured — login OTP for {to_email}: {otp}")
+        return
+    message = MessageSchema(
+        recipients=[to_email],
+        subject="Your xspend login code",
+        template_body={"otp": otp},
+        subtype=MessageType.html,
+    )
+    await _fm.send_message(message, template_name="login_otp.html")

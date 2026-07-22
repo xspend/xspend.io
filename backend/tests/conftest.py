@@ -5,6 +5,7 @@ a real DB. DATABASE_URL is set here BEFORE any app module is imported, so
 database.py builds its engine against the temp DB.
 """
 import os
+import re
 import sys
 import tempfile
 
@@ -67,9 +68,17 @@ def client():
 
 
 @pytest.fixture
-def make_user(client):
+def make_user(client, capsys):
     """Factory: signs up a user via the real auth flow, verifies their email
-    (login is gated on that), logs in, and returns (user_id, auth headers)."""
+    (login is gated on that), logs in + completes the OTP 2FA step, and
+    returns (user_id, auth headers).
+
+    The OTP is hashed at rest (unlike the plaintext email-verification
+    token), so there's no DB column to read it back from. SMTP is disabled
+    for tests (see the env blanking above), which makes send_login_otp_email
+    print `[email] ... login OTP for <email>: <otp>` to stdout instead of
+    sending — capsys grabs that line to get the real code.
+    """
     def _make(email="a@test.com", password="password123", name="A"):
         r = client.post("/auth/signup", json={"email": email, "password": password, "name": name})
         assert r.status_code == 201, r.text
@@ -91,6 +100,15 @@ def make_user(client):
         assert r.status_code == 200, r.text
 
         r = client.post("/auth/login", json={"email": email, "password": password})
+        assert r.status_code == 200, r.text
+        login_token = r.json()["login_token"]
+
+        printed = capsys.readouterr().out
+        match = re.search(rf"login OTP for {re.escape(email)}: (\d{{6}})", printed)
+        assert match, f"expected the console-fallback OTP line in stdout, got: {printed!r}"
+        otp = match.group(1)
+
+        r = client.post("/auth/verify-otp", json={"login_token": login_token, "otp": otp})
         assert r.status_code == 200, r.text
         access_token = r.json()["access_token"]
         return user_id, {"Authorization": f"Bearer {access_token}"}
