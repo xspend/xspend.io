@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { User, LogOut, ChevronDown, Settings as SettingsIcon } from 'lucide-react'
 import { API_URL } from '../lib/config'
+import { clearSession } from '../lib/auth'
 
 const TITLES = {
   '/app/upload':       'Upload',
@@ -58,9 +59,7 @@ export default function AppHeader() {
   }, [])
 
   const handleSignOut = () => {
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('user_name')
-    localStorage.removeItem('user_email')
+    clearSession()
     navigate('/')
   }
 

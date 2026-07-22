@@ -1,65 +1,85 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { API_URL } from '../lib/config'
+import {
+  signup,
+  isValidEmail,
+  validatePassword,
+  getErrorDetail,
+} from '../lib/auth'
+import { AUTH_COLORS, labelStyle, inputStyle } from '../lib/authStyles'
+import {
+  AuthPage,
+  AuthCard,
+  AuthButton,
+  ErrorBanner,
+  PasswordInput,
+  FieldError,
+  SuccessDialog,
+} from './AuthShell'
 
-const F = "'DM Sans', Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
-
-const C = {
-  bg:         '#fafaf5',
-  cardBg:     'rgba(255,255,255,0.65)',
-  text:       '#1a1a1a',
-  textMuted:  '#5a5a5a',
-  textHint:   '#8a8a85',
-  border:     'rgba(0,0,0,0.12)',
-  borderSoft: 'rgba(0,0,0,0.04)',
-  inputBg:    '#ffffff',
-  inputBorder:'rgba(0,0,0,0.12)',
-  accent:     '#e85d3c',
-  errorBg:    '#fdecea',
-  errorBorder:'rgba(220,38,38,0.2)',
-  errorText:  '#b1372a',
-  ctaBg:      '#1a1a1a',
-  ctaText:    '#fafaf5',
+const emptyErrors = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
 }
 
 export default function Signup() {
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const navigate = useNavigate()
+  const C = AUTH_COLORS
+  const [form, setForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  })
+  const [errors, setErrors] = useState(emptyErrors)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
+  const [showSuccess, setShowSuccess] = useState(false)
+
+  const setField = (key) => (e) => {
+    const value = e.target.value
+    setForm((f) => ({ ...f, [key]: value }))
+    if (errors[key]) setErrors((prev) => ({ ...prev, [key]: '' }))
+    if (error) setError('')
+  }
+
+  const validate = () => {
+    const next = { ...emptyErrors }
+    if (!form.firstName.trim()) next.firstName = 'First name is required'
+    if (!form.lastName.trim()) next.lastName = 'Last name is required'
+    if (!form.email.trim()) next.email = 'Email is required'
+    else if (!isValidEmail(form.email)) next.email = 'Enter a valid email address'
+    next.password = validatePassword(form.password)
+    if (!form.confirmPassword) next.confirmPassword = 'Confirm password is required'
+    else if (form.confirmPassword !== form.password) {
+      next.confirmPassword = 'Passwords must match'
+    }
+    setErrors(next)
+    return !Object.values(next).some(Boolean)
+  }
 
   const submit = async () => {
-    if (!form.email || !form.password) {
-      setError('Please enter your email and password')
-      return
-    }
-    if (form.password.length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
+    if (loading) return
+    if (!validate()) return
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${API_URL}/auth/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          password: form.password,
-        })
+      const name = `${form.firstName.trim()} ${form.lastName.trim()}`.trim()
+      const { res, data } = await signup({
+        name,
+        email: form.email.trim(),
+        password: form.password,
       })
-      const data = await res.json()
       if (!res.ok) {
-        setError(data.detail || 'Signup failed')
+        setError(getErrorDetail(data, 'Signup failed'))
         setLoading(false)
         return
       }
-      localStorage.setItem('auth_token', data.token)
-      localStorage.setItem('user_email', data.user.email)
-      if (data.user.name) localStorage.setItem('user_name', data.user.name.split(' ')[0])
-      localStorage.setItem('just_signed_up', 'true')
-      navigate('/app/upload')
+      setShowSuccess(true)
     } catch {
       setError('Could not connect. Make sure the app is running.')
     }
@@ -71,203 +91,121 @@ export default function Signup() {
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: C.bg,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontFamily: F,
-      padding: 20,
-    }}>
-      <div style={{ width: '100%', maxWidth: 420 }}>
+    <AuthPage>
+      <AuthCard
+        title="Create your account"
+        subtitle="Email and password. No credit card needed."
+      >
+        <ErrorBanner message={error} />
 
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <Link to="/" style={{
-            textDecoration: 'none',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 10,
-          }}>
-            <span style={{
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              background: C.text,
-              display: 'inline-flex',
-              position: 'relative',
-            }}>
-              <span style={{
-                position: 'absolute',
-                top: 4,
-                right: 4,
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: C.accent,
-              }}/>
-            </span>
-            <span style={{
-              fontWeight: 500,
-              fontSize: 20,
-              color: C.text,
-              letterSpacing: 1.8,
-            }}>XSPEND</span>
-          </Link>
-        </div>
-
-        {/* Card */}
-        <div style={{
-          background: C.cardBg,
-          border: `0.5px solid ${C.border}`,
-          borderRadius: 16,
-          padding: '36px 32px',
-        }}>
-          <h1 style={{
-            fontSize: 26,
-            fontWeight: 500,
-            color: C.text,
-            margin: '0 0 6px',
-            textAlign: 'center',
-            letterSpacing: '-0.01em',
-          }}>
-            Create your account
-          </h1>
-          <p style={{
-            fontSize: 16,
-            color: C.textMuted,
-            textAlign: 'center',
-            margin: '0 0 28px',
-          }}>
-            Email and password. No credit card needed.
-          </p>
-
-          {error && (
-            <div style={{
-              background: C.errorBg,
-              border: `0.5px solid ${C.errorBorder}`,
-              borderRadius: 10,
-              padding: '10px 14px',
-              marginBottom: 18,
-            }}>
-              <p style={{ color: C.errorText, fontSize: 15, margin: 0 }}>{error}</p>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div>
-              <label style={labelStyle}>Name</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>First name</label>
               <input
                 type="text"
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                value={form.firstName}
+                onChange={setField('firstName')}
                 onKeyDown={handleKeyDown}
-                placeholder="Your name"
+                placeholder="First"
                 style={inputStyle}
                 autoFocus
+                autoComplete="given-name"
               />
+              <FieldError message={errors.firstName} />
             </div>
-            <div>
-              <label style={labelStyle}>Email</label>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Last name</label>
               <input
-                type="email"
-                value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                type="text"
+                value={form.lastName}
+                onChange={setField('lastName')}
                 onKeyDown={handleKeyDown}
-                placeholder="you@example.com"
+                placeholder="Last"
                 style={inputStyle}
-                autoComplete="off"
+                autoComplete="family-name"
               />
-            </div>
-            <div>
-              <label style={labelStyle}>Password</label>
-              <input
-                type="password"
-                value={form.password}
-                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                onKeyDown={handleKeyDown}
-                placeholder="At least 8 characters"
-                style={inputStyle}
-                autoComplete="new-password"
-              />
+              <FieldError message={errors.lastName} />
             </div>
           </div>
 
-          <button
-            onClick={submit}
-            disabled={loading}
-            style={{
-              width: '100%',
-              background: C.ctaBg,
-              color: C.ctaText,
-              border: 'none',
-              borderRadius: 10,
-              padding: '13px 20px',
-              fontSize: 17,
-              fontWeight: 500,
-              cursor: loading ? 'default' : 'pointer',
-              opacity: loading ? 0.6 : 1,
-              marginTop: 22,
-              fontFamily: 'inherit',
-              transition: 'opacity 0.15s',
-            }}
-          >
-            {loading ? 'Creating account…' : 'Create account'}
-          </button>
+          <div>
+            <label style={labelStyle}>Email</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={setField('email')}
+              onKeyDown={handleKeyDown}
+              placeholder="you@example.com"
+              style={inputStyle}
+              autoComplete="email"
+            />
+            <FieldError message={errors.email} />
+          </div>
 
-          <p style={{
-            fontSize: 15,
-            color: C.textMuted,
-            textAlign: 'center',
-            margin: '20px 0 0',
-          }}>
-            Already have an account?{' '}
-            <Link to="/login" style={{
-              color: C.text,
-              textDecoration: 'underline',
-              textUnderlineOffset: 3,
-              fontWeight: 500,
-            }}>
-              Sign in
-            </Link>
-          </p>
+          <div>
+            <label style={labelStyle}>Password</label>
+            <PasswordInput
+              value={form.password}
+              onChange={setField('password')}
+              onKeyDown={handleKeyDown}
+              placeholder="At least 8 characters"
+              autoComplete="new-password"
+            />
+            <FieldError message={errors.password} />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Confirm password</label>
+            <PasswordInput
+              value={form.confirmPassword}
+              onChange={setField('confirmPassword')}
+              onKeyDown={handleKeyDown}
+              placeholder="Re-enter password"
+              autoComplete="new-password"
+            />
+            <FieldError message={errors.confirmPassword} />
+          </div>
         </div>
 
-        {/* Back to landing */}
-        <div style={{ textAlign: 'center', marginTop: 24 }}>
-          <Link to="/" style={{
-            fontSize: 15,
-            color: C.textHint,
-            textDecoration: 'none',
+        <AuthButton onClick={submit} loading={loading}>
+          {loading ? 'Creating account…' : 'Create account'}
+        </AuthButton>
+
+        <p style={{
+          fontSize: 15,
+          color: C.textMuted,
+          textAlign: 'center',
+          margin: '20px 0 0',
+        }}>
+          Already have an account?{' '}
+          <Link to="/login" style={{
+            color: C.text,
+            textDecoration: 'underline',
+            textUnderlineOffset: 3,
+            fontWeight: 500,
           }}>
-            ← Back
+            Sign in
           </Link>
-        </div>
+        </p>
+      </AuthCard>
 
-      </div>
-    </div>
+      <SuccessDialog
+        open={showSuccess}
+        title="Registration Successful!"
+        primaryLabel="Back to Login"
+        onPrimary={() => navigate('/login')}
+      >
+        <p style={{ margin: '0 0 10px' }}>
+          Your account has been created successfully.
+        </p>
+        <p style={{ margin: '0 0 10px' }}>
+          Please verify your email before logging in.
+        </p>
+        <p style={{ margin: 0 }}>
+          We&apos;ve sent a verification link to your registered email address.
+        </p>
+      </SuccessDialog>
+    </AuthPage>
   )
-}
-
-const labelStyle = {
-  display: 'block',
-  fontSize: 14,
-  fontWeight: 500,
-  color: '#5a5a5a',
-  marginBottom: 6,
-  letterSpacing: '0.2px',
-}
-
-const inputStyle = {
-  background: '#ffffff',
-  border: '0.5px solid rgba(0,0,0,0.12)',
-  borderRadius: 10,
-  padding: '12px 14px',
-  color: '#1a1a1a',
-  fontSize: 17,
-  outline: 'none',
-  fontFamily: 'inherit',
-  width: '100%',
-  boxSizing: 'border-box',
 }
