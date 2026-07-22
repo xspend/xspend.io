@@ -176,7 +176,9 @@ def test_alembic_check_reports_no_drift(migrated_db):
 
 
 def test_downgrade_and_reupgrade_round_trip(migrated_db):
-    r = _run_alembic(migrated_db, "downgrade", "-1")
+    # Target the migration by name, not "-1" — later migrations (e.g. 0005)
+    # get added after this one, so "head" isn't always one step past 0004.
+    r = _run_alembic(migrated_db, "downgrade", "0003_uuid_to_integer_pks")
     assert r.returncode == 0, r.stdout + r.stderr
 
     insp = inspect(create_engine(migrated_db))
@@ -188,7 +190,7 @@ def test_downgrade_and_reupgrade_round_trip(migrated_db):
     with e.connect() as c:
         assert c.execute(text("SELECT COUNT(*) FROM users")).scalar() == 2
 
-    r = _run_alembic(migrated_db, "upgrade", "head")
+    r = _run_alembic(migrated_db, "upgrade", "0004_pk_columns_to_id")
     assert r.returncode == 0, r.stderr
 
     insp = inspect(create_engine(migrated_db))

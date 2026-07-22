@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import extract as _extract
 
 from app.db import get_db
-from app.auth import get_current_user
+from app.core.deps import get_current_user
 from app.models import Transaction
 from app.api.common import tx_to_dict
 

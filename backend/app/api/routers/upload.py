@@ -5,7 +5,7 @@ from datetime import datetime
 import traceback
 
 from app.db import get_db
-from app.auth import get_current_user
+from app.core.deps import get_current_user
 from app.models import Transaction, UploadedFile as UploadedFileModel, Category
 from app.parsers import parse_statement
 from app.services.fixed_classifier import classify_all_transactions

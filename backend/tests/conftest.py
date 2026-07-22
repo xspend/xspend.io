@@ -14,6 +14,15 @@ os.environ["DATABASE_URL"] = f"sqlite:///{os.path.join(_TMPDIR, 'test.db')}"
 os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret")
 
+# Tests must never hit a real SMTP server, even if the developer's .env has
+# live credentials for local manual testing. app.core.config.Settings reads
+# real os.environ vars with HIGHER priority than .env file values, so blanking
+# these — not deleting them — is what actually sticks; email_service treats an
+# empty string as "not configured" and falls back to logging the verification
+# link instead of sending it.
+for _var in ("SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM"):
+    os.environ[_var] = ""
+
 # Make the backend package importable regardless of pytest's invocation dir.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -59,10 +68,30 @@ def client():
 
 @pytest.fixture
 def make_user(client):
-    """Factory: signs up a user via the real auth flow, returns (user_id, auth headers)."""
+    """Factory: signs up a user via the real auth flow, verifies their email
+    (login is gated on that), logs in, and returns (user_id, auth headers)."""
     def _make(email="a@test.com", password="password123", name="A"):
         r = client.post("/auth/signup", json={"email": email, "password": password, "name": name})
+        assert r.status_code == 201, r.text
+        user_id = r.json()["user"]["id"]
+
+        db = SessionLocal()
+        try:
+            from app.models import EmailVerificationToken
+            token_row = (
+                db.query(EmailVerificationToken)
+                .filter(EmailVerificationToken.user_id == user_id)
+                .first()
+            )
+            token = token_row.token
+        finally:
+            db.close()
+
+        r = client.post("/auth/verify-email", json={"token": token})
         assert r.status_code == 200, r.text
-        body = r.json()
-        return body["user"]["id"], {"Authorization": f"Bearer {body['token']}"}
+
+        r = client.post("/auth/login", json={"email": email, "password": password})
+        assert r.status_code == 200, r.text
+        access_token = r.json()["access_token"]
+        return user_id, {"Authorization": f"Bearer {access_token}"}
     return _make

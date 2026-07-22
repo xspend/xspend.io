@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.db import get_db
-from app.auth import get_current_user
+from app.core.deps import get_current_user
 from app.models import TransactionRule
 
 router = APIRouter()

@@ -5,21 +5,16 @@ get_ai_response(message, tx_list) builds a compact, precise summary of the user'
 transactions in Python (so the model gets clean numbers, not hundreds of raw rows),
 then asks Claude to answer in plain, non-technical, ~5-second language.
 
-The .env ANTHROPIC_API_KEY is loaded by main.py (load_dotenv) before this is called;
-we also call load_dotenv() here defensively.
+ANTHROPIC_API_KEY and XSPEND_CHAT_MODEL come from app.core.config, which reads
+.env directly — no load_dotenv() call needed here.
 """
 
-import os
 from collections import defaultdict
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except Exception:
-    pass
+from app.core.config import settings
 
 # Model: a current Claude model. Adjust if your account uses a different alias.
-_MODEL = os.getenv("XSPEND_CHAT_MODEL", "claude-3-5-sonnet-20241022")
+_MODEL = settings.XSPEND_CHAT_MODEL
 
 # Spending = expenses only (mirrors the dashboard definition).
 _EXCLUDED_TYPES = {
@@ -243,7 +238,7 @@ def get_ai_response(message, tx_list=None):
     Returns: assistant response text (str). Raises on hard errors so the caller
              can surface a message.
     """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = settings.ANTHROPIC_API_KEY
     if not api_key:
         return ("AI chat isn't configured yet — the server is missing its "
                 "ANTHROPIC_API_KEY. Add it to the backend .env to enable chat.")

@@ -1,18 +1,14 @@
-import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+
+from app.core.config import settings
 
 # DATABASE_URL must be set explicitly — there is no default. A silent fallback
 # here used to mean "local" and "production" were decided by whether something
 # happened to load .env first, not by what you actually typed. Same DB every
 # time you forget to set it is worse than just telling you it's not set.
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
-if not SQLALCHEMY_DATABASE_URL:
-    raise RuntimeError(
-        "DATABASE_URL is not set. Set it explicitly before running anything, e.g. "
-        'DATABASE_URL="sqlite:///./financeai.db" for local dev.'
-    )
+SQLALCHEMY_DATABASE_URL = settings.database_url
 
 # check_same_thread is a SQLite-only arg; only pass it when actually on SQLite.
 _connect_args = {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}

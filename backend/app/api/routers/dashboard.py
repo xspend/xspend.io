@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import extract as _extract
 
 from app.db import get_db
-from app.auth import get_current_user
+from app.core.deps import get_current_user
 from app.models import Transaction
 from app.services.fixed_classifier import display_merchant
 

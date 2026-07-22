@@ -10,6 +10,7 @@ class User(Base):
     full_name = Column(String(150))
     email = Column(String(255), unique=True, nullable=True)
     password_hash = Column(String(255), nullable=True)
+    email_verified = Column(Boolean, nullable=False, server_default="false", default=False)
     income_amount = Column(Float, default=0)
     income_frequency = Column(String(30), default="monthly")
     savings_goal_weekly = Column(Float, default=0)

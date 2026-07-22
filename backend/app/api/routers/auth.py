@@ -2,93 +2,104 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.auth import get_current_user, hash_password, verify_password, create_token, decode_token, security
+from app.core.deps import get_current_user, get_current_access_payload
 from app.models import User
+from app.services import auth_service
+from app.schemas.auth import (
+    SignupRequest, SignupResponse,
+    LoginRequest, LoginResponse,
+    VerifyEmailRequest, MessageResponse,
+    ResendVerificationRequest,
+    RefreshRequest, TokenPairResponse,
+    LogoutRequest,
+    UserResponse,
+)
 
-router = APIRouter()
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-# ── Auth Endpoints ──
+def _user_response(user: User) -> UserResponse:
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        name=user.full_name or "",
+        monthly_budget=user.monthly_budget or 0,
+        email_verified=user.email_verified,
+    )
 
-@router.post("/auth/signup")
-def auth_signup(data: dict, db: Session = Depends(get_db)):
-    import sqlalchemy as _sa
-    email = (data.get("email") or "").lower().strip()
-    password = data.get("password") or ""
-    name = data.get("name") or ""
-    budget = float(data.get("monthly_budget") or 0)
-    if not email or not password:
-        raise HTTPException(status_code=400, detail="Email and password required")
-    # Basic email format + password strength checks.
-    import re as _re_v
-    if not _re_v.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
-        raise HTTPException(status_code=400, detail="Please enter a valid email address")
-    # Common domain-typo guard (gmai.com, yaho.com, etc.) with a suggestion.
-    _COMMON_TYPOS = {
-        "gmai.com": "gmail.com", "gmial.com": "gmail.com", "gmal.com": "gmail.com",
-        "gmail.co": "gmail.com", "gnail.com": "gmail.com", "gmaill.com": "gmail.com",
-        "yaho.com": "yahoo.com", "yahooo.com": "yahoo.com", "yahoo.co": "yahoo.com",
-        "hotmial.com": "hotmail.com", "hotmai.com": "hotmail.com", "hotmil.com": "hotmail.com",
-        "outlok.com": "outlook.com", "outloo.com": "outlook.com",
-        "iclod.com": "icloud.com", "icloud.co": "icloud.com",
-    }
-    _dom = email.split("@")[1] if "@" in email else ""
-    if _dom in _COMMON_TYPOS:
-        _user = email.split("@")[0]
-        raise HTTPException(status_code=400, detail=f"Did you mean {_user}@{_COMMON_TYPOS[_dom]}? Please check your email address.")
-    if len(password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
-    existing = db.execute(_sa.text("SELECT id FROM users WHERE email = :e"), {"e": email}).fetchone()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    hashed = hash_password(password)
-    # Always create a NEW user (each signup is a distinct account). user_id is
-    # an autoincrement integer PK — the DB assigns it, not the app.
-    new_user = User(email=email, password_hash=hashed, full_name=name, monthly_budget=budget)
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    user_id = new_user.id
-    token = create_token(user_id, email)
-    return {"token": token, "user": {"id": user_id, "email": email, "name": name, "monthly_budget": budget}}
 
-@router.post("/auth/login")
-def auth_login(data: dict, db: Session = Depends(get_db)):
-    import sqlalchemy as _sa
-    email = (data.get("email") or "").lower().strip()
-    password = data.get("password") or ""
-    user = db.execute(_sa.text(
-        "SELECT id, email, password_hash, full_name, monthly_budget FROM users WHERE email = :e"
-    ), {"e": email}).fetchone()
-    if not user or not verify_password(password, user[2]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_token(user[0], user[1])
-    return {"token": token, "user": {"id": user[0], "email": user[1], "name": user[3], "monthly_budget": user[4]}}
+@router.post("/signup", response_model=SignupResponse, status_code=201, summary="Create an account")
+async def signup(data: SignupRequest, db: Session = Depends(get_db)):
+    try:
+        user = await auth_service.signup(db, data.email, data.password, data.name)
+    except auth_service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return SignupResponse(
+        message="Account created. Check your email to verify your address before logging in.",
+        user=_user_response(user),
+    )
 
-@router.delete("/auth/account")
+
+@router.post("/verify-email", response_model=MessageResponse, summary="Verify an email address")
+def verify_email(data: VerifyEmailRequest, db: Session = Depends(get_db)):
+    try:
+        auth_service.verify_email(db, data.token, data.eid)
+    except auth_service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return MessageResponse(message="Email verified — you can now log in.")
+
+
+@router.post("/resend-verification", response_model=MessageResponse, summary="Resend the verification email")
+async def resend_verification(data: ResendVerificationRequest, db: Session = Depends(get_db)):
+    try:
+        await auth_service.resend_verification(db, data.email)
+    except auth_service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return MessageResponse(message="Verification email sent.")
+
+
+@router.post("/login", response_model=LoginResponse, summary="Log in and get an access/refresh token pair")
+def login(data: LoginRequest, db: Session = Depends(get_db)):
+    try:
+        access_token, refresh_token, user = auth_service.login(db, data.email, data.password)
+    except auth_service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return LoginResponse(
+        access_token=access_token, refresh_token=refresh_token,
+        user=_user_response(user),
+    )
+
+
+@router.post("/refresh", response_model=TokenPairResponse, summary="Exchange a refresh token for a new pair")
+def refresh(data: RefreshRequest, db: Session = Depends(get_db)):
+    try:
+        access_token, refresh_token = auth_service.refresh(db, data.refresh_token)
+    except auth_service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return TokenPairResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/logout", response_model=MessageResponse, summary="Log out (blacklists the access token)")
+def logout(
+    data: LogoutRequest,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(get_current_access_payload),
+):
+    auth_service.logout(db, int(payload["sub"]), payload.get("jti"), payload.get("exp"), data.refresh_token)
+    return MessageResponse(message="Logged out.")
+
+
+@router.delete("/account", response_model=MessageResponse, summary="Delete the current user and all their data")
 def delete_account(db: Session = Depends(get_db), current_user: int = Depends(get_current_user)):
     """Delete the current user and ALL of their data. Irreversible."""
-    import sqlalchemy as _sa
-    uid = current_user
-    for tbl in ("transactions", "uploaded_files", "accounts", "merchant_rules",
-                "projects"):
-        try:
-            db.execute(_sa.text(f"DELETE FROM {tbl} WHERE user_id = :uid"), {"uid": uid})
-        except Exception:
-            pass
+    auth_service.delete_account(db, current_user)
+    return MessageResponse(message="Account deleted.")
+
+
+@router.get("/me", response_model=UserResponse, summary="Get the current user")
+def me(db: Session = Depends(get_db), current_user: int = Depends(get_current_user)):
     try:
-        db.execute(_sa.text("DELETE FROM users WHERE id = :uid"), {"uid": uid})
-    except Exception:
-        pass
-    db.commit()
-    return {"success": True}
-
-
-@router.get("/auth/me")
-def auth_me(credentials = Depends(security)):
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    payload = decode_token(credentials.credentials)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    return payload
+        user = auth_service.get_profile(db, current_user)
+    except auth_service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return _user_response(user)

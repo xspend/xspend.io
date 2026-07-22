@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
-import os
 
+from app.core.config import settings
 from app.db import get_db
-from app.auth import get_current_user
+from app.core.deps import get_current_user
 from app.models import ChatLog, Transaction
 
 router = APIRouter()
@@ -35,7 +35,7 @@ def chat(msg: ChatMessage, db: Session = Depends(get_db), current_user: int = De
 
 # ── Curated, templated prompts (free, instant, capped) ──
 
-CHAT_PROMPT_LIMIT = int(os.getenv("XSPEND_CHAT_PROMPT_LIMIT", "10"))
+CHAT_PROMPT_LIMIT = settings.XSPEND_CHAT_PROMPT_LIMIT
 
 CHAT_PROMPTS = [
     {"id": "net_cash_flow",

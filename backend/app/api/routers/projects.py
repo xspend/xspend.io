@@ -5,7 +5,7 @@ from typing import Optional
 from datetime import datetime, date as date_type
 
 from app.db import get_db
-from app.auth import get_current_user
+from app.core.deps import get_current_user
 from app.models import Project, Transaction
 
 router = APIRouter()

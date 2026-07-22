@@ -1,10 +1,8 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-import os
-from dotenv import load_dotenv
-load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
 from app.db import SessionLocal
 from app.models import seed_default_categories
 
@@ -28,13 +26,21 @@ async def lifespan(app: FastAPI):
         db.close()
     yield
 
-app = FastAPI(title="FinanceAI API", lifespan=lifespan)
+app = FastAPI(
+    title="FinanceAI API",
+    version="1.0.0",
+    description="xspend backend: statement upload, categorized spending, cash-flow insights, savings projects.",
+    lifespan=lifespan,
+    openapi_tags=[
+        {"name": "auth", "description": "Signup, email verification, login, token refresh, logout."},
+    ],
+)
 
 # Allowed origins: localhost for dev + any production domains from the
 # FRONTEND_ORIGINS env var (comma-separated). Set this in Render to your Vercel
 # domain so the deployed frontend isn't blocked by CORS.
 _default_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
-_prod_origins = [o.strip() for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()]
+_prod_origins = settings.frontend_origins_list
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_default_origins + _prod_origins,
