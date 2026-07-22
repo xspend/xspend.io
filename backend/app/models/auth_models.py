@@ -53,6 +53,21 @@ class LoginOtp(Base):
     locked_until = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
+class PasswordResetToken(Base):
+    """Same shape as EmailVerificationToken — a single-use, expiring, emailed
+    token proving ownership of the account's email — but for the forgot-
+    password flow instead of signup verification. Kept as its own table
+    rather than reused so the two flows can have different expiries/behavior
+    (see auth_service.PASSWORD_RESET_EXPIRE_MINUTES) without cross-affecting
+    each other."""
+    __tablename__ = "password_reset_tokens"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token = Column(String(255), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=func.now())
+
 class TokenBlacklist(Base):
     """Access-token `jti`s revoked at logout. A row here makes that specific
     access token rejected for the rest of its natural expiry — cheap to check

@@ -16,7 +16,7 @@ from .models import (
     MerchantRule,
     seed_default_categories,
 )
-from .auth_models import EmailVerificationToken, RefreshToken, TokenBlacklist, LoginOtp
+from .auth_models import EmailVerificationToken, RefreshToken, TokenBlacklist, LoginOtp, PasswordResetToken
 
 __all__ = [
     "User",
@@ -39,4 +39,5 @@ __all__ = [
     "RefreshToken",
     "TokenBlacklist",
     "LoginOtp",
+    "PasswordResetToken",
 ]

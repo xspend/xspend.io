@@ -220,6 +220,51 @@ def test_login_otps_keeps_a_single_row_per_user(client, db, capsys):
         assert db.query(LoginOtp).filter(LoginOtp.user_id == user_id).count() == 1
 
 
+def test_resend_otp_issues_new_code_and_invalidates_old_login_token(client, db, capsys):
+    r = client.post("/auth/signup", json={"email": "otp9@test.com", "password": "password123"})
+    token = _verification_token(db, r.json()["user"]["id"])
+    client.post("/auth/verify-email", json={"token": token})
+
+    step1 = client.post("/auth/login", json={"email": "otp9@test.com", "password": "password123"})
+    old_login_token = step1.json()["login_token"]
+    _otp_from_console(capsys, "otp9@test.com")
+
+    resend = client.post("/auth/resend-otp", json={"login_token": old_login_token})
+    assert resend.status_code == 200
+    new_login_token = resend.json()["login_token"]
+    assert new_login_token != old_login_token
+    new_otp = _otp_from_console(capsys, "otp9@test.com")
+
+    # the old login_token no longer works at all
+    old_attempt = client.post("/auth/verify-otp", json={"login_token": old_login_token, "otp": new_otp})
+    assert old_attempt.status_code == 401
+
+    # the new one, with the new code, does
+    new_attempt = client.post("/auth/verify-otp", json={"login_token": new_login_token, "otp": new_otp})
+    assert new_attempt.status_code == 200
+
+
+def test_resend_otp_rejects_bogus_login_token(client):
+    r = client.post("/auth/resend-otp", json={"login_token": "not-a-real-token"})
+    assert r.status_code == 401
+
+
+def test_resend_otp_rejects_while_locked_out(client, db, capsys):
+    r = client.post("/auth/signup", json={"email": "otp10@test.com", "password": "password123"})
+    token = _verification_token(db, r.json()["user"]["id"])
+    client.post("/auth/verify-email", json={"token": token})
+
+    step1 = client.post("/auth/login", json={"email": "otp10@test.com", "password": "password123"})
+    login_token = step1.json()["login_token"]
+    _otp_from_console(capsys, "otp10@test.com")
+
+    for _ in range(5):
+        client.post("/auth/verify-otp", json={"login_token": login_token, "otp": "000000"})
+
+    resend = client.post("/auth/resend-otp", json={"login_token": login_token})
+    assert resend.status_code == 429
+
+
 def test_verify_email_rejects_bad_or_reused_token(client, db):
     r = client.post("/auth/signup", json={"email": "verify@test.com", "password": "password123"})
     token = _verification_token(db, r.json()["user"]["id"])
@@ -262,6 +307,129 @@ def test_resend_verification_issues_a_new_token(client, db):
 def test_resend_verification_unknown_email(client):
     r = client.post("/auth/resend-verification", json={"email": "nobody@test.com"})
     assert r.status_code == 404
+
+
+def _reset_link_from_console(capsys, email):
+    """SMTP is disabled in tests, so send_password_reset_email prints the
+    link to stdout — grab the token and eid query params out of it."""
+    printed = capsys.readouterr().out
+    match = re.search(
+        rf"password reset link for {re.escape(email)}: \S*\?token=([^&\s]+)&eid=([^&\s]+)", printed
+    )
+    assert match, f"expected the console-fallback reset link line in stdout, got: {printed!r}"
+    return match.group(1), match.group(2)
+
+
+def test_forgot_password_unknown_email_gets_the_same_generic_response(client):
+    r = client.post("/auth/forgot-password", json={"email": "nobody@test.com"})
+    assert r.status_code == 200
+    assert "If that email is registered" in r.json()["message"]
+
+
+def test_forgot_password_known_email_sends_reset_link(client, db, capsys):
+    r = client.post("/auth/signup", json={"email": "forgot1@test.com", "password": "password123"})
+    token = _verification_token(db, r.json()["user"]["id"])
+    client.post("/auth/verify-email", json={"token": token})
+
+    r = client.post("/auth/forgot-password", json={"email": "forgot1@test.com"})
+    assert r.status_code == 200
+    assert "If that email is registered" in r.json()["message"]
+    reset_token, _eid = _reset_link_from_console(capsys, "forgot1@test.com")
+    assert reset_token
+
+
+def test_reset_password_with_valid_token_allows_login_with_new_password(client, db, capsys):
+    r = client.post("/auth/signup", json={"email": "forgot2@test.com", "password": "password123"})
+    token = _verification_token(db, r.json()["user"]["id"])
+    client.post("/auth/verify-email", json={"token": token})
+
+    client.post("/auth/forgot-password", json={"email": "forgot2@test.com"})
+    reset_token, eid = _reset_link_from_console(capsys, "forgot2@test.com")
+
+    reset = client.post(
+        "/auth/reset-password",
+        json={"token": reset_token, "eid": eid, "new_password": "newpassword456"},
+    )
+    assert reset.status_code == 200
+
+    # old password no longer works, new one does
+    old = client.post("/auth/login", json={"email": "forgot2@test.com", "password": "password123"})
+    assert old.status_code == 401
+    new = client.post("/auth/login", json={"email": "forgot2@test.com", "password": "newpassword456"})
+    assert new.status_code == 200
+
+
+def test_reset_password_rejects_bad_or_reused_token(client, db, capsys):
+    r = client.post("/auth/signup", json={"email": "forgot3@test.com", "password": "password123"})
+    token = _verification_token(db, r.json()["user"]["id"])
+    client.post("/auth/verify-email", json={"token": token})
+
+    client.post("/auth/forgot-password", json={"email": "forgot3@test.com"})
+    reset_token, eid = _reset_link_from_console(capsys, "forgot3@test.com")
+
+    bad = client.post(
+        "/auth/reset-password", json={"token": "not-a-real-token", "new_password": "newpassword456"}
+    )
+    assert bad.status_code == 400
+
+    first = client.post(
+        "/auth/reset-password", json={"token": reset_token, "eid": eid, "new_password": "newpassword456"}
+    )
+    assert first.status_code == 200
+
+    reused = client.post(
+        "/auth/reset-password", json={"token": reset_token, "eid": eid, "new_password": "yetanotherpw789"}
+    )
+    assert reused.status_code == 400
+
+
+def test_reset_password_eid_mismatch_rejected(client, db, capsys):
+    r = client.post("/auth/signup", json={"email": "forgot4@test.com", "password": "password123"})
+    user_id = r.json()["user"]["id"]
+    token = _verification_token(db, user_id)
+    client.post("/auth/verify-email", json={"token": token})
+
+    client.post("/auth/forgot-password", json={"email": "forgot4@test.com"})
+    reset_token, _eid = _reset_link_from_console(capsys, "forgot4@test.com")
+
+    from app.core.security import encode_id
+    mismatched = client.post(
+        "/auth/reset-password",
+        json={"token": reset_token, "eid": encode_id(user_id + 999), "new_password": "newpassword456"},
+    )
+    assert mismatched.status_code == 400
+
+
+def test_reset_password_rejects_short_password(client, db, capsys):
+    r = client.post("/auth/signup", json={"email": "forgot5@test.com", "password": "password123"})
+    token = _verification_token(db, r.json()["user"]["id"])
+    client.post("/auth/verify-email", json={"token": token})
+
+    client.post("/auth/forgot-password", json={"email": "forgot5@test.com"})
+    reset_token, eid = _reset_link_from_console(capsys, "forgot5@test.com")
+
+    r = client.post(
+        "/auth/reset-password", json={"token": reset_token, "eid": eid, "new_password": "short"}
+    )
+    assert r.status_code == 422
+
+
+def test_reset_password_revokes_existing_refresh_tokens(client, make_user, capsys):
+    _user_id, headers = make_user(email="forgot6@test.com")
+    login = _login_with_otp(client, capsys, "forgot6@test.com", "password123")
+    old_refresh_token = login["refresh_token"]
+
+    client.post("/auth/forgot-password", json={"email": "forgot6@test.com"})
+    reset_token, eid = _reset_link_from_console(capsys, "forgot6@test.com")
+    reset = client.post(
+        "/auth/reset-password",
+        json={"token": reset_token, "eid": eid, "new_password": "newpassword456"},
+    )
+    assert reset.status_code == 200
+
+    # the refresh token from before the reset must no longer work
+    r = client.post("/auth/refresh", json={"refresh_token": old_refresh_token})
+    assert r.status_code == 401
 
 
 def test_refresh_rotates_token_and_revokes_the_old_one(client, make_user, capsys):
@@ -318,6 +486,70 @@ def test_me_returns_current_user(client, make_user):
     r = client.get("/auth/me", headers=headers)
     assert r.status_code == 200
     assert r.json()["email"] == "me@test.com"
+
+
+def test_change_password_success_and_old_password_stops_working(client, make_user):
+    _user_id, headers = make_user(email="changepw1@test.com")
+
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "password123", "new_password": "newpassword456"},
+        headers=headers,
+    )
+    assert r.status_code == 200
+
+    old = client.post("/auth/login", json={"email": "changepw1@test.com", "password": "password123"})
+    assert old.status_code == 401
+    new = client.post("/auth/login", json={"email": "changepw1@test.com", "password": "newpassword456"})
+    assert new.status_code == 200
+
+
+def test_change_password_wrong_current_password_rejected(client, make_user):
+    _user_id, headers = make_user(email="changepw2@test.com")
+
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "wrongpassword", "new_password": "newpassword456"},
+        headers=headers,
+    )
+    assert r.status_code == 401
+
+    # the password must be unchanged
+    still_works = client.post("/auth/login", json={"email": "changepw2@test.com", "password": "password123"})
+    assert still_works.status_code == 200
+
+
+def test_change_password_requires_auth(client):
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "password123", "new_password": "newpassword456"},
+    )
+    assert r.status_code == 401
+
+
+def test_change_password_rejects_short_new_password(client, make_user):
+    _user_id, headers = make_user(email="changepw3@test.com")
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "password123", "new_password": "short"},
+        headers=headers,
+    )
+    assert r.status_code == 422
+
+
+def test_change_password_revokes_other_refresh_tokens(client, make_user, capsys):
+    _user_id, headers = make_user(email="changepw4@test.com")
+    login = _login_with_otp(client, capsys, "changepw4@test.com", "password123")
+    old_refresh_token = login["refresh_token"]
+
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "password123", "new_password": "newpassword456"},
+        headers=headers,
+    )
+    assert r.status_code == 200
+
+    assert client.post("/auth/refresh", json={"refresh_token": old_refresh_token}).status_code == 401
 
 
 def test_protected_endpoint_requires_auth(client):

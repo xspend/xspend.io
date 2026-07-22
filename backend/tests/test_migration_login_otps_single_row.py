@@ -6,6 +6,9 @@ Builds the pre-0008 (post-0007) schema via the real migration chain, seeds a
 user with TWO existing login_otps rows (the old one-row-per-attempt shape),
 runs 0008, and asserts the dedup + new constraint/column — SQLite for CI
 portability (also hand-verified against a real local Postgres during dev).
+
+Stops at 0008 specifically (not "head") since 0009 lands afterward — same
+reasoning as test_migration_auth_tables.py / test_migration_login_otps.py.
 """
 import os
 import subprocess
@@ -51,7 +54,7 @@ def migrated_db():
         ))
     engine.dispose()
 
-    r = _run_alembic(db_url, "upgrade", "head")
+    r = _run_alembic(db_url, "upgrade", "0008_login_otps_single_row")
     assert r.returncode == 0, r.stderr
 
     yield db_url
@@ -86,21 +89,15 @@ def test_second_row_for_same_user_now_rejected(migrated_db):
             ))
 
 
-def test_alembic_check_reports_no_drift(migrated_db):
-    r = _run_alembic(migrated_db, "check")
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert "No new upgrade operations detected" in (r.stdout + r.stderr)
-
-
 def test_downgrade_and_reupgrade_round_trip(migrated_db):
-    r = _run_alembic(migrated_db, "downgrade", "-1")
+    r = _run_alembic(migrated_db, "downgrade", "0007_login_otps")
     assert r.returncode == 0, r.stdout + r.stderr
 
     insp = inspect(create_engine(migrated_db))
     assert "locked_until" not in {c["name"] for c in insp.get_columns("login_otps")}
     assert insp.get_unique_constraints("login_otps") == []
 
-    r = _run_alembic(migrated_db, "upgrade", "head")
+    r = _run_alembic(migrated_db, "upgrade", "0008_login_otps_single_row")
     assert r.returncode == 0, r.stderr
 
     insp = inspect(create_engine(migrated_db))

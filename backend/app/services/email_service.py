@@ -73,3 +73,21 @@ async def send_login_otp_email(to_email: str, otp: str) -> None:
         subtype=MessageType.html,
     )
     await _fm.send_message(message, template_name="login_otp.html")
+
+
+def reset_password_link(token: str, user_id: int) -> str:
+    return f"{APP_BASE_URL.rstrip('/')}/reset-password?token={token}&eid={encode_id(user_id)}"
+
+
+async def send_password_reset_email(to_email: str, token: str, user_id: int) -> None:
+    link = reset_password_link(token, user_id)
+    if _fm is None:
+        print(f"[email] SMTP not configured — password reset link for {to_email}: {link}")
+        return
+    message = MessageSchema(
+        recipients=[to_email],
+        subject="Reset your xspend password",
+        template_body={"link": link},
+        subtype=MessageType.html,
+    )
+    await _fm.send_message(message, template_name="reset_password.html")

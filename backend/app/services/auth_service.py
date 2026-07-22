@@ -17,7 +17,8 @@ from app.repositories import auth_repository
 from . import email_service
 
 EMAIL_VERIFICATION_EXPIRE_HOURS = 24
-OTP_EXPIRE_MINUTES = 10
+PASSWORD_RESET_EXPIRE_MINUTES = 60
+OTP_EXPIRE_MINUTES = 2
 MAX_OTP_ATTEMPTS = 5
 OTP_LOCKOUT_MINUTES = 10
 
@@ -53,6 +54,10 @@ class AlreadyVerified(AuthError):
 
 
 class InvalidVerificationToken(AuthError):
+    status_code = 400
+
+
+class InvalidResetToken(AuthError):
     status_code = 400
 
 
@@ -132,6 +137,58 @@ async def resend_verification(db: Session, email: str) -> None:
     await email_service.send_verification_email(user.email, token, user.id)
 
 
+async def forgot_password(db: Session, email: str) -> None:
+    """Deliberately silent on an unknown email — unlike resend_verification,
+    this endpoint must not reveal whether an address is registered. The
+    router always returns the same generic message regardless of what
+    happens here."""
+    email = email.lower().strip()
+    user = auth_repository.get_user_by_email(db, email)
+    if not user:
+        return
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES)
+    auth_repository.create_password_reset_token(db, user.id, token, expires_at)
+    await email_service.send_password_reset_email(user.email, token, user.id)
+
+
+def reset_password(db: Session, token: str, new_password: str, eid: Optional[str] = None) -> User:
+    row = auth_repository.get_password_reset_token(db, token)
+    if not row:
+        raise InvalidResetToken("Invalid or expired reset link")
+    if row.used:
+        raise InvalidResetToken("This reset link has already been used")
+    if row.expires_at < datetime.utcnow():
+        raise InvalidResetToken("This reset link has expired — request a new one")
+    if eid is not None and security.decode_id(eid) != row.user_id:
+        raise InvalidResetToken("Invalid or expired reset link")
+    user = auth_repository.get_user_by_id(db, row.user_id)
+    if not user:
+        raise InvalidResetToken("Invalid or expired reset link")
+
+    auth_repository.mark_password_reset_token_used(db, row)
+    auth_repository.update_user_password(db, user, security.hash_password(new_password))
+    # a changed password should end every other session, not just this request
+    auth_repository.revoke_all_refresh_tokens_for_user(db, user.id)
+    return user
+
+
+def change_password(db: Session, user_id: int, current_password: str, new_password: str) -> None:
+    """For an already-logged-in user changing their password on purpose
+    (knows the current one) — as opposed to reset_password(), which is the
+    forgot-password recovery path via an emailed token. Also revokes every
+    refresh token, same as a reset: the current access token still works
+    until it naturally expires, but nothing can mint a new one off the old
+    password's sessions."""
+    user = auth_repository.get_user_by_id(db, user_id)
+    if not user:
+        raise UserNotFound("User not found")
+    if not security.verify_password(current_password, user.password_hash or ""):
+        raise InvalidCredentials("Current password is incorrect")
+    auth_repository.update_user_password(db, user, security.hash_password(new_password))
+    auth_repository.revoke_all_refresh_tokens_for_user(db, user.id)
+
+
 async def login(db: Session, email: str, password: str) -> str:
     """Checks email+password (factor 1), then emails a fresh OTP (factor 2)
     and returns the login_token the client must present, along with that
@@ -185,6 +242,28 @@ def verify_login_otp(db: Session, login_token: str, otp: str) -> Tuple[str, str,
     auth_repository.mark_login_otp_used(db, row)
     access_token, refresh_token = _issue_token_pair(db, user)
     return access_token, refresh_token, user
+
+
+async def resend_otp(db: Session, login_token: str) -> str:
+    """Re-sends a fresh OTP for a pending login challenge, without making the
+    caller re-enter their password. Reuses the same upsert path as login()
+    (same user_id row, new login_token/OTP/expiry, attempts reset) — the old
+    login_token stops working once this succeeds."""
+    row = auth_repository.get_login_otp_by_token(db, login_token)
+    if not row or row.used:
+        raise InvalidOtp("Invalid or expired login attempt")
+    if row.locked_until and row.locked_until > datetime.utcnow():
+        raise TooManyOtpAttempts(_lockout_message(row.locked_until))
+    user = auth_repository.get_user_by_id(db, row.user_id)
+    if not user:
+        raise InvalidOtp("Invalid or expired login attempt")
+
+    new_login_token = secrets.token_urlsafe(32)
+    otp = security.generate_otp()
+    expires_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRE_MINUTES)
+    auth_repository.upsert_login_otp(db, user.id, new_login_token, security.hash_password(otp), expires_at)
+    await email_service.send_login_otp_email(user.email, otp)
+    return new_login_token
 
 
 def refresh(db: Session, refresh_token: str) -> Tuple[str, str]:

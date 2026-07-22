@@ -1,14 +1,16 @@
 """All SQLAlchemy queries for the auth flow. No business rules here — just
-CRUD against User, EmailVerificationToken, RefreshToken, TokenBlacklist, and
-LoginOtp. app/services/auth_service.py is the caller; it decides what the
-results mean.
+CRUD against User, EmailVerificationToken, RefreshToken, TokenBlacklist,
+LoginOtp, and PasswordResetToken. app/services/auth_service.py is the
+caller; it decides what the results mean.
 """
 from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import User, EmailVerificationToken, RefreshToken, TokenBlacklist, LoginOtp
+from app.models import (
+    User, EmailVerificationToken, RefreshToken, TokenBlacklist, LoginOtp, PasswordResetToken,
+)
 
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
@@ -35,6 +37,11 @@ def create_user(db: Session, email: str, password_hash: str, name: str, monthly_
 
 def mark_user_verified(db: Session, user: User) -> None:
     user.email_verified = True
+    db.commit()
+
+
+def update_user_password(db: Session, user: User, password_hash: str) -> None:
+    user.password_hash = password_hash
     db.commit()
 
 
@@ -87,6 +94,18 @@ def revoke_refresh_token(db: Session, row: RefreshToken) -> None:
     db.commit()
 
 
+def revoke_all_refresh_tokens_for_user(db: Session, user_id: int) -> None:
+    """Kills every other session on password reset — a stolen/old password
+    shouldn't leave existing refresh tokens usable to mint new access
+    tokens forever. Access tokens already issued still run out their normal
+    (short) expiry; there's no registry of live access-token jtis to
+    blacklist en masse."""
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id, RefreshToken.revoked == False  # noqa: E712
+    ).update({"revoked": True})
+    db.commit()
+
+
 def is_jti_blacklisted(db: Session, jti: str) -> bool:
     return db.query(TokenBlacklist).filter(TokenBlacklist.jti == jti).first() is not None
 
@@ -135,5 +154,21 @@ def lock_login_otp(db: Session, row: LoginOtp, locked_until: datetime) -> None:
 
 
 def mark_login_otp_used(db: Session, row: LoginOtp) -> None:
+    row.used = True
+    db.commit()
+
+
+def create_password_reset_token(db: Session, user_id: int, token: str, expires_at: datetime) -> PasswordResetToken:
+    row = PasswordResetToken(user_id=user_id, token=token, expires_at=expires_at)
+    db.add(row)
+    db.commit()
+    return row
+
+
+def get_password_reset_token(db: Session, token: str) -> Optional[PasswordResetToken]:
+    return db.query(PasswordResetToken).filter(PasswordResetToken.token == token).first()
+
+
+def mark_password_reset_token_used(db: Session, row: PasswordResetToken) -> None:
     row.used = True
     db.commit()

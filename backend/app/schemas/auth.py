@@ -47,6 +47,14 @@ class VerifyEmailRequest(BaseModel):
     token: str
     eid: Optional[str] = None
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    eid: Optional[str] = None
+    new_password: str = Field(min_length=8)
+
 class LoginOtpRequiredResponse(BaseModel):
     message: str
     login_token: str
@@ -54,6 +62,13 @@ class LoginOtpRequiredResponse(BaseModel):
 class VerifyOtpRequest(BaseModel):
     login_token: str
     otp: str
+
+class ResendOtpRequest(BaseModel):
+    login_token: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
 
 class RefreshRequest(BaseModel):
     refresh_token: str

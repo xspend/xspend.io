@@ -8,9 +8,11 @@ from app.services import auth_service
 from app.schemas.auth import (
     SignupRequest, SignupResponse,
     LoginRequest, LoginOtpRequiredResponse,
-    VerifyOtpRequest, LoginResponse,
+    VerifyOtpRequest, ResendOtpRequest, LoginResponse,
     VerifyEmailRequest, MessageResponse,
     ResendVerificationRequest,
+    ForgotPasswordRequest, ResetPasswordRequest,
+    ChangePasswordRequest,
     RefreshRequest, TokenPairResponse,
     LogoutRequest,
     UserResponse,
@@ -59,6 +61,25 @@ async def resend_verification(data: ResendVerificationRequest, db: Session = Dep
     return MessageResponse(message="Verification email sent.")
 
 
+@router.post("/forgot-password", response_model=MessageResponse,
+             summary="Request a password reset email")
+async def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    await auth_service.forgot_password(db, data.email)
+    # Always the same response, whether or not the email is registered —
+    # anything else would let an attacker enumerate accounts by email.
+    return MessageResponse(message="If that email is registered, we've sent a password reset link.")
+
+
+@router.post("/reset-password", response_model=MessageResponse,
+             summary="Reset a password using the emailed token")
+def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
+    try:
+        auth_service.reset_password(db, data.token, data.new_password, data.eid)
+    except auth_service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return MessageResponse(message="Password reset — you can now log in with your new password.")
+
+
 @router.post("/login", response_model=LoginOtpRequiredResponse,
              summary="Log in with email+password (step 1 of 2) — emails an OTP")
 async def login(data: LoginRequest, db: Session = Depends(get_db)):
@@ -82,6 +103,19 @@ def verify_otp(data: VerifyOtpRequest, db: Session = Depends(get_db)):
     return LoginResponse(
         access_token=access_token, refresh_token=refresh_token,
         user=_user_response(user),
+    )
+
+
+@router.post("/resend-otp", response_model=LoginOtpRequiredResponse,
+             summary="Resend the login OTP for a pending login attempt")
+async def resend_otp(data: ResendOtpRequest, db: Session = Depends(get_db)):
+    try:
+        login_token = await auth_service.resend_otp(db, data.login_token)
+    except auth_service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return LoginOtpRequiredResponse(
+        message="Check your email for a new login code.",
+        login_token=login_token,
     )
 
 
@@ -109,6 +143,20 @@ def delete_account(db: Session = Depends(get_db), current_user: int = Depends(ge
     """Delete the current user and ALL of their data. Irreversible."""
     auth_service.delete_account(db, current_user)
     return MessageResponse(message="Account deleted.")
+
+
+@router.post("/change-password", response_model=MessageResponse,
+             summary="Change password while logged in (requires the current password)")
+def change_password(
+    data: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: int = Depends(get_current_user),
+):
+    try:
+        auth_service.change_password(db, current_user, data.current_password, data.new_password)
+    except auth_service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return MessageResponse(message="Password changed.")
 
 
 @router.get("/me", response_model=UserResponse, summary="Get the current user")
