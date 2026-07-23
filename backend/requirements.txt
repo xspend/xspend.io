@@ -14,6 +14,7 @@ charset-normalizer==3.4.5
 click==8.3.1
 coverage==7.15.2
 cryptography==49.0.0
+Deprecated==1.3.1
 distro==1.9.0
 dnspython==2.8.0
 docstring_parser==0.17.0
@@ -29,6 +30,7 @@ httpx==0.28.1
 idna==3.11
 Jinja2==3.1.6
 jiter==0.13.0
+limits==5.8.0
 lxml==6.0.2
 numpy==2.4.3
 ofxparse==0.21
@@ -56,6 +58,7 @@ regex==2026.7.19
 requests==2.33.1
 rsa==4.9.1
 six==1.17.0
+slowapi==0.1.10
 sniffio==1.3.1
 soupsieve==2.8.3
 SQLAlchemy==2.0.48
@@ -64,3 +67,4 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 urllib3==2.6.3
 uvicorn==0.41.0
+wrapt==2.2.2

@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.db import get_db
 from app.core.deps import get_current_user, get_current_access_payload
 from app.models import User
@@ -32,7 +34,8 @@ def _user_response(user: User) -> UserResponse:
 
 
 @router.post("/signup", response_model=SignupResponse, status_code=201, summary="Create an account")
-async def signup(data: SignupRequest, db: Session = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMIT_SIGNUP)
+async def signup(request: Request, data: SignupRequest, db: Session = Depends(get_db)):
     try:
         user = await auth_service.signup(db, data.email, data.password, data.name)
     except auth_service.AuthError as e:
@@ -53,7 +56,8 @@ def verify_email(data: VerifyEmailRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/resend-verification", response_model=MessageResponse, summary="Resend the verification email")
-async def resend_verification(data: ResendVerificationRequest, db: Session = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMIT_SENSITIVE)
+async def resend_verification(request: Request, data: ResendVerificationRequest, db: Session = Depends(get_db)):
     try:
         await auth_service.resend_verification(db, data.email)
     except auth_service.AuthError as e:
@@ -63,7 +67,8 @@ async def resend_verification(data: ResendVerificationRequest, db: Session = Dep
 
 @router.post("/forgot-password", response_model=MessageResponse,
              summary="Request a password reset email")
-async def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMIT_SENSITIVE)
+async def forgot_password(request: Request, data: ForgotPasswordRequest, db: Session = Depends(get_db)):
     await auth_service.forgot_password(db, data.email)
     # Always the same response, whether or not the email is registered —
     # anything else would let an attacker enumerate accounts by email.
@@ -82,7 +87,8 @@ def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=LoginOtpRequiredResponse,
              summary="Log in with email+password (step 1 of 2) — emails an OTP")
-async def login(data: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMIT_LOGIN)
+async def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
     try:
         login_token = await auth_service.login(db, data.email, data.password)
     except auth_service.AuthError as e:
@@ -95,7 +101,8 @@ async def login(data: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/verify-otp", response_model=LoginResponse,
              summary="Verify the emailed OTP (step 2 of 2) — returns an access/refresh token pair")
-def verify_otp(data: VerifyOtpRequest, db: Session = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMIT_OTP_VERIFY)
+def verify_otp(request: Request, data: VerifyOtpRequest, db: Session = Depends(get_db)):
     try:
         access_token, refresh_token, user = auth_service.verify_login_otp(db, data.login_token, data.otp)
     except auth_service.AuthError as e:
@@ -108,7 +115,8 @@ def verify_otp(data: VerifyOtpRequest, db: Session = Depends(get_db)):
 
 @router.post("/resend-otp", response_model=LoginOtpRequiredResponse,
              summary="Resend the login OTP for a pending login attempt")
-async def resend_otp(data: ResendOtpRequest, db: Session = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMIT_SENSITIVE)
+async def resend_otp(request: Request, data: ResendOtpRequest, db: Session = Depends(get_db)):
     try:
         login_token = await auth_service.resend_otp(db, data.login_token)
     except auth_service.AuthError as e:

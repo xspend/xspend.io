@@ -24,6 +24,12 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret")
 for _var in ("SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM"):
     os.environ[_var] = ""
 
+# Rate limiting is a process-wide in-memory counter (not reset per-test), so
+# without this, tests hammering the same endpoint (e.g. 5+ signup/login calls
+# across different test functions) would eventually trip real limits and
+# fail for reasons that have nothing to do with what's being tested.
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+
 # Make the backend package importable regardless of pytest's invocation dir.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

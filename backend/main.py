@@ -1,8 +1,12 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+from app.core.middleware import setup_cors, setup_security_headers
+from app.core.rate_limit import limiter
 from app.db import SessionLocal
 from app.models import seed_default_categories
 
@@ -36,18 +40,16 @@ app = FastAPI(
     ],
 )
 
-# Allowed origins: localhost for dev + any production domains from the
-# FRONTEND_ORIGINS env var (comma-separated). Set this in Render to your Vercel
-# domain so the deployed frontend isn't blocked by CORS.
-_default_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
-_prod_origins = settings.frontend_origins_list
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_default_origins + _prod_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Middleware order matters: Starlette runs the LAST-added middleware
+# outermost, so CORS goes last — that way even a 429 (rate limit) or 5xx
+# still carries CORS headers, instead of the browser treating it as an
+# opaque network error the frontend JS can't read.
+setup_security_headers(app)
+app.add_middleware(SlowAPIMiddleware)
+setup_cors(app)
 
 app.include_router(profile.router)
 app.include_router(accounts.router)

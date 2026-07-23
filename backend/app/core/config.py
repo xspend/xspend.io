@@ -1,7 +1,7 @@
 """Single source of truth for every environment variable the app reads —
-database, JWT, SMTP, CORS, and the AI chat provider. Reads `.env` directly
-(independent of whether something else already called `load_dotenv()`), so
-import order doesn't matter. Everywhere else should do
+database, JWT, SMTP, CORS, rate limiting, and the AI chat provider. Reads
+`.env` directly (independent of whether something else already called
+`load_dotenv()`), so import order doesn't matter. Everywhere else should do
 `from app.core.config import settings` instead of calling os.getenv directly.
 """
 from typing import List, Optional
@@ -31,6 +31,18 @@ class Settings(BaseSettings):
     OTP_EXPIRE_MINUTES: int = 2
     MAX_OTP_ATTEMPTS: int = 5
     OTP_LOCKOUT_MINUTES: int = 10
+
+    # Rate limiting (slowapi/limits, keyed by client IP). Disabled entirely in
+    # tests — see tests/conftest.py — so rapid repeated calls in the test
+    # suite never trip these. RATE_LIMIT_DEFAULT applies to every route that
+    # doesn't set its own explicit @limiter.limit(...); the auth-specific
+    # ones below override it on the endpoints most worth protecting.
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_DEFAULT: str = "100/minute"
+    RATE_LIMIT_SIGNUP: str = "5/minute"
+    RATE_LIMIT_LOGIN: str = "10/minute"
+    RATE_LIMIT_OTP_VERIFY: str = "10/minute"
+    RATE_LIMIT_SENSITIVE: str = "5/minute"  # forgot-password, resend-*
 
     # Left as raw strings (not int/bool) so a test blanking them to "" via
     # os.environ never hits a type-coercion error — cast where actually used.
