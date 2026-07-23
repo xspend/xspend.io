@@ -11,7 +11,7 @@ from app.db import SessionLocal
 from app.models import seed_default_categories
 
 from app.api.routers import (
-    profile, accounts, categories, upload, transactions, rules, admin,
+    profile, accounts, categories, upload, transactions, rules,
     chat, budget, projects, dashboard, fixed_expenses, insights, auth,
     credit_offsets,
 )
@@ -57,7 +57,6 @@ app.include_router(categories.router)
 app.include_router(upload.router)
 app.include_router(transactions.router)
 app.include_router(rules.router)
-app.include_router(admin.router)
 app.include_router(chat.router)
 app.include_router(budget.router)
 app.include_router(projects.router)
