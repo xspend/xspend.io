@@ -199,6 +199,11 @@ async def login(db: Session, email: str, password: str) -> str:
     user = auth_repository.get_user_by_email(db, email)
     if not user or not security.verify_password(password, user.password_hash or ""):
         raise InvalidCredentials("Invalid email or password")
+    if user.is_deleted:
+        # Defense in depth — the mangled email on soft-delete already means
+        # this lookup should never match the original address in the first
+        # place, but check explicitly in case that ever isn't true.
+        raise InvalidCredentials("Invalid email or password")
     if not user.email_verified:
         raise EmailNotVerified("Please verify your email before logging in")
 
@@ -221,7 +226,7 @@ def verify_login_otp(db: Session, login_token: str, otp: str) -> Tuple[str, str,
     if row.locked_until and row.locked_until > datetime.utcnow():
         raise TooManyOtpAttempts(_lockout_message(row.locked_until))
     if row.expires_at < datetime.utcnow():
-        raise InvalidOtp("This code has expired — please log in again")
+        raise InvalidOtp("This code has expired.")
     if not security.verify_password(otp, row.otp_hash):
         auth_repository.increment_login_otp_attempts(db, row)
         if row.attempts >= settings.MAX_OTP_ATTEMPTS:
@@ -302,4 +307,12 @@ def get_profile(db: Session, user_id: int) -> User:
 
 
 def delete_account(db: Session, user_id: int) -> None:
-    auth_repository.delete_user_cascade(db, user_id)
+    """Soft delete — flags the account and mangles its email (frees the
+    address for a new signup) but keeps every row of data. Revokes every
+    refresh token immediately; the current access token (if any) gets
+    rejected right away too, via the is_deleted check in app/core/deps.py."""
+    user = auth_repository.get_user_by_id(db, user_id)
+    if not user:
+        raise UserNotFound("User not found")
+    auth_repository.soft_delete_user(db, user)
+    auth_repository.revoke_all_refresh_tokens_for_user(db, user.id)

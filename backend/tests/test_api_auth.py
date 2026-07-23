@@ -552,6 +552,78 @@ def test_change_password_revokes_other_refresh_tokens(client, make_user, capsys)
     assert client.post("/auth/refresh", json={"refresh_token": old_refresh_token}).status_code == 401
 
 
+def test_delete_route_is_now_auth_user_not_auth_account(client, make_user):
+    _user_id, headers = make_user(email="routecheck@test.com")
+    assert client.delete("/auth/account", headers=headers).status_code == 404
+    assert client.delete("/auth/user", headers=headers).status_code == 200
+
+
+def test_soft_delete_leaves_all_data_intact(client, db, make_user):
+    from app.models import User, UserProfile, Account
+
+    user_id, headers = make_user(email="softdelete1@test.com")
+    db.add(Account(user_id=user_id, account_name="Checking"))
+    db.commit()
+
+    r = client.delete("/auth/user", headers=headers)
+    assert r.status_code == 200
+
+    user = db.query(User).filter(User.id == user_id).first()
+    assert user is not None
+    assert user.is_deleted is True
+    assert user.email != "softdelete1@test.com"  # mangled, not gone
+
+    assert db.query(UserProfile).filter(UserProfile.user_id == user_id).first() is not None
+    assert db.query(Account).filter(Account.user_id == user_id).count() == 1
+
+
+def test_soft_delete_mangles_email_and_frees_it_for_new_signup(client, db, make_user):
+    from app.models import User
+
+    user_id, headers = make_user(email="softdelete2@test.com")
+    client.delete("/auth/user", headers=headers)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    assert user.email == f"deleted+{user_id}+softdelete2@test.com"
+
+    signup = client.post(
+        "/auth/signup", json={"email": "softdelete2@test.com", "password": "password123"}
+    )
+    assert signup.status_code == 201
+    assert signup.json()["user"]["id"] != user_id
+
+
+def test_soft_delete_invalidates_the_current_access_token_immediately(client, make_user):
+    user_id, headers = make_user(email="softdelete3@test.com")
+
+    # the token is valid right up until the delete call
+    assert client.get("/auth/me", headers=headers).status_code == 200
+
+    r = client.delete("/auth/user", headers=headers)
+    assert r.status_code == 200
+
+    # the SAME still-unexpired access token must now be rejected
+    assert client.get("/auth/me", headers=headers).status_code == 401
+
+
+def test_soft_delete_revokes_refresh_tokens(client, make_user, capsys):
+    _user_id, headers = make_user(email="softdelete4@test.com")
+    login = _login_with_otp(client, capsys, "softdelete4@test.com", "password123")
+    refresh_token = login["refresh_token"]
+
+    client.delete("/auth/user", headers=headers)
+
+    assert client.post("/auth/refresh", json={"refresh_token": refresh_token}).status_code == 401
+
+
+def test_login_fails_after_soft_delete(client, make_user):
+    _user_id, headers = make_user(email="softdelete5@test.com")
+    client.delete("/auth/user", headers=headers)
+
+    r = client.post("/auth/login", json={"email": "softdelete5@test.com", "password": "password123"})
+    assert r.status_code == 401
+
+
 def test_protected_endpoint_requires_auth(client):
     # /transactions must never serve data without a valid bearer token.
     assert client.get("/transactions").status_code == 401

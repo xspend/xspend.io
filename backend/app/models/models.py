@@ -11,6 +11,25 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=True)
     password_hash = Column(String(255), nullable=True)
     email_verified = Column(Boolean, nullable=False, server_default="false", default=False)
+    # Soft delete: on DELETE /auth/user, the row stays (all financial data is kept)
+    # but this flips true and the email gets mangled (see auth_repository.soft_delete_user)
+    # so the address frees up for a new signup.
+    is_deleted = Column(Boolean, nullable=False, server_default="false", default=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    accounts = relationship("Account", back_populates="user")
+    uploaded_files = relationship("UploadedFile", back_populates="user")
+    transactions = relationship("Transaction", back_populates="user")
+    profile = relationship("UserProfile", uselist=False, back_populates="user")
+
+class UserProfile(Base):
+    """Financial/goal-planning data, split out from `users` so that table holds
+    only auth/identity columns. One row per user (see the unique constraint on
+    user_id) — created alongside the User row at signup (auth_repository.create_user)."""
+    __tablename__ = "user_profiles"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     income_amount = Column(Float, default=0)
     income_frequency = Column(String(30), default="monthly")
     savings_goal_weekly = Column(Float, default=0)
@@ -22,15 +41,8 @@ class User(Base):
     currency_code = Column(String(3), default="USD")
     monthly_budget = Column(Float, default=0)
     payday_day = Column(String, nullable=True)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    accounts = relationship("Account", back_populates="user")
-    uploaded_files = relationship("UploadedFile", back_populates="user")
-    transactions = relationship("Transaction", back_populates="user")
-
-# Legacy alias
-UserProfile = User
+    user = relationship("User", back_populates="profile")
 
 class Account(Base):
     __tablename__ = "accounts"

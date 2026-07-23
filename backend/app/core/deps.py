@@ -20,6 +20,17 @@ def get_current_access_payload(credentials=Depends(security), db: Session = Depe
     jti = payload.get("jti")
     if jti and auth_repository.is_jti_blacklisted(db, jti):
         raise HTTPException(status_code=401, detail="Session has been logged out")
+    try:
+        user_id = int(payload["sub"])
+    except (TypeError, ValueError):
+        return payload  # malformed sub — get_current_user() below raises its own clean 401
+    user = auth_repository.get_user_by_id(db, user_id)
+    if user and user.is_deleted:
+        # An already-issued access token shouldn't keep working just because
+        # it hasn't naturally expired yet — deletion should be immediate, not
+        # "wait a few minutes" (unlike the password-change case, which relies
+        # on natural expiry since it's less final than an account deletion).
+        raise HTTPException(status_code=401, detail="This account no longer exists")
     return payload
 
 

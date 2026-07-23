@@ -41,7 +41,7 @@ def get_insights(month: str = None, months: str = None, db: Session = Depends(ge
                    if (t.get('transaction_date') or '')[:7] in _wanted]
 
     profile_row = db.execute(_sa.text(
-        "SELECT monthly_budget FROM users WHERE id = :u"
+        "SELECT monthly_budget FROM user_profiles WHERE user_id = :u"
     ), {'u': current_user}).fetchone()
     budget = float(profile_row[0] or 0) if profile_row else 0
 

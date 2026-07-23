@@ -9,7 +9,8 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models import (
-    User, EmailVerificationToken, RefreshToken, TokenBlacklist, LoginOtp, PasswordResetToken,
+    User, UserProfile, EmailVerificationToken, RefreshToken, TokenBlacklist, LoginOtp,
+    PasswordResetToken,
 )
 
 
@@ -26,12 +27,13 @@ def create_user(db: Session, email: str, password_hash: str, name: str, monthly_
         email=email,
         password_hash=password_hash,
         full_name=name,
-        monthly_budget=monthly_budget,
         email_verified=False,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+    db.add(UserProfile(user_id=user.id, monthly_budget=monthly_budget))
+    db.commit()
     return user
 
 
@@ -45,20 +47,13 @@ def update_user_password(db: Session, user: User, password_hash: str) -> None:
     db.commit()
 
 
-def delete_user_cascade(db: Session, user_id: int) -> None:
-    """Raw-SQL cascade delete for the user's data. Auth tables
-    (email_verification_tokens, refresh_tokens) clean up on their own via
-    ON DELETE CASCADE; token_blacklist has no FK to users, so nothing to do there."""
-    import sqlalchemy as sa
-    for table in ("transactions", "uploaded_files", "accounts", "merchant_rules", "projects"):
-        try:
-            db.execute(sa.text(f"DELETE FROM {table} WHERE user_id = :uid"), {"uid": user_id})
-        except Exception:
-            pass
-    try:
-        db.execute(sa.text("DELETE FROM users WHERE id = :uid"), {"uid": user_id})
-    except Exception:
-        pass
+def soft_delete_user(db: Session, user: User) -> None:
+    """Flags the account deleted without touching any of its data. The email
+    is mangled (not just flagged) so the original address frees up for a
+    fresh signup — `users.email` stays a plain unique column, no conditional
+    index needed."""
+    user.email = f"deleted+{user.id}+{user.email}"
+    user.is_deleted = True
     db.commit()
 
 

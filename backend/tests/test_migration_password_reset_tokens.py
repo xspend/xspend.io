@@ -6,11 +6,8 @@ Builds the pre-0009 (post-0008) schema via the real migration chain, seeds a
 user, runs 0009, and asserts the new table's shape — SQLite for CI
 portability (also hand-verified against a real local Postgres during dev).
 
-0009 is the current head, so the fixture upgrades to "head" (needed for the
-alembic-check test below). If a later migration changes password_reset_tokens
-again, follow the same fix applied to test_migration_auth_tables.py /
-test_migration_login_otps.py: pin this fixture to "0009_password_reset_tokens"
-explicitly and move the alembic-check test to the new migration's test file.
+Stops at 0009 specifically (not "head") since 0010 lands afterward — same
+reasoning as test_migration_auth_tables.py / test_migration_login_otps.py.
 """
 import os
 import subprocess
@@ -47,7 +44,7 @@ def migrated_db():
         c.execute(text("INSERT INTO users (email, full_name) VALUES ('alice@test.com', 'Alice')"))
     engine.dispose()
 
-    r = _run_alembic(db_url, "upgrade", "head")
+    r = _run_alembic(db_url, "upgrade", "0009_password_reset_tokens")
     assert r.returncode == 0, r.stderr
 
     yield db_url
@@ -76,12 +73,6 @@ def test_token_column_is_unique(migrated_db):
     insp = inspect(create_engine(migrated_db))
     indexes = insp.get_indexes("password_reset_tokens")
     assert any(ix["unique"] and ix["column_names"] == ["token"] for ix in indexes)
-
-
-def test_alembic_check_reports_no_drift(migrated_db):
-    r = _run_alembic(migrated_db, "check")
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert "No new upgrade operations detected" in (r.stdout + r.stderr)
 
 
 def test_downgrade_and_reupgrade_round_trip(migrated_db):

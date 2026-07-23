@@ -80,7 +80,7 @@ def migrated_db():
         ))
     engine.dispose()
 
-    r = _run_alembic(db_url, "upgrade", "head")
+    r = _run_alembic(db_url, "upgrade", "0004_pk_columns_to_id")
     assert r.returncode == 0, r.stderr
 
     yield db_url
@@ -167,12 +167,6 @@ def test_autoincrement_continues_after_rename(migrated_db):
         c.execute(text("INSERT INTO users (email, full_name) VALUES ('carol@test.com', 'Carol')"))
         new_id = c.execute(text("SELECT id FROM users WHERE email='carol@test.com'")).scalar()
     assert new_id == 3  # after alice(1), bob(2)
-
-
-def test_alembic_check_reports_no_drift(migrated_db):
-    r = _run_alembic(migrated_db, "check")
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert "No new upgrade operations detected" in (r.stdout + r.stderr)
 
 
 def test_downgrade_and_reupgrade_round_trip(migrated_db):

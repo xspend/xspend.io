@@ -28,7 +28,7 @@ def _user_response(user: User) -> UserResponse:
         id=user.id,
         email=user.email,
         name=user.full_name or "",
-        monthly_budget=user.monthly_budget or 0,
+        monthly_budget=(user.profile.monthly_budget if user.profile else 0) or 0,
         email_verified=user.email_verified,
     )
 
@@ -146,11 +146,13 @@ def logout(
     return MessageResponse(message="Logged out.")
 
 
-@router.delete("/account", response_model=MessageResponse, summary="Delete the current user and all their data")
+@router.delete("/user", response_model=MessageResponse,
+               summary="Deactivate the current account (soft delete)")
 def delete_account(db: Session = Depends(get_db), current_user: int = Depends(get_current_user)):
-    """Delete the current user and ALL of their data. Irreversible."""
+    """Soft delete: flags the account and frees its email for reuse, but keeps
+    every row of data (transactions, accounts, profile, ...) untouched."""
     auth_service.delete_account(db, current_user)
-    return MessageResponse(message="Account deleted.")
+    return MessageResponse(message="Account deactivated.")
 
 
 @router.post("/change-password", response_model=MessageResponse,
