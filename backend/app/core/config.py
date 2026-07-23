@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     XSPEND_CHAT_MODEL: str = "claude-3-5-sonnet-20241022"
     XSPEND_CHAT_PROMPT_LIMIT: int = 10
 
-    FRONTEND_ORIGINS: str = ""
+    ALLOWED_ORIGINS: str = ""
     APP_BASE_URL: Optional[str] = None
 
     EMAIL_VERIFICATION_EXPIRE_HOURS: int = 24
@@ -75,8 +75,8 @@ class Settings(BaseSettings):
         return "financeai-dev-only-secret-change-me"
 
     @property
-    def frontend_origins_list(self) -> List[str]:
-        return [o.strip() for o in self.FRONTEND_ORIGINS.split(",") if o.strip()]
+    def allowed_origins(self) -> List[str]:
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
     @property
     def smtp_configured(self) -> bool:

@@ -9,16 +9,16 @@ from app.core.config import settings
 
 
 def setup_cors(app: FastAPI) -> None:
-    """Allowed origins: localhost for dev + whatever's in FRONTEND_ORIGINS
-    (comma-separated) for prod — set that in Render to the Vercel domain so
-    the deployed frontend isn't blocked. Methods/headers are the actual set
-    this API uses, not a wildcard — allow_credentials=True plus a wildcard
-    for either is a common CORS-hardening smell even where the spec
-    technically permits it."""
-    default_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    """Allowed origins come entirely from ALLOWED_ORIGINS (comma-separated)
+    — no hardcoded localhost fallback. Local dev must list its own origin
+    (e.g. http://localhost:5173) in .env just like prod lists its Vercel
+    domain; same "no silent default" rule as DATABASE_URL. Methods/headers
+    are the actual set this API uses, not a wildcard — allow_credentials=True
+    plus a wildcard for either is a common CORS-hardening smell even where
+    the spec technically permits it."""
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=default_origins + settings.frontend_origins_list,
+        allow_origins=settings.allowed_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],

@@ -14,10 +14,10 @@ from app.core.security import encode_id
 TEMPLATE_FOLDER = Path(__file__).parent.parent / "templates"
 
 # Where verification links point — a frontend route, not this API. Falls back
-# to the first FRONTEND_ORIGINS entry, then localhost, if APP_BASE_URL isn't set.
+# to the first ALLOWED_ORIGINS entry, then localhost, if APP_BASE_URL isn't set.
 APP_BASE_URL = (
     settings.APP_BASE_URL
-    or (settings.frontend_origins_list[0] if settings.frontend_origins_list else None)
+    or (settings.allowed_origins[0] if settings.allowed_origins else None)
     or "http://localhost:5173"
 )
 
