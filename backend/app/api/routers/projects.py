@@ -162,6 +162,10 @@ def update_transaction_project(tid: int, data: TransactionProjectUpdate, db: Ses
         raise HTTPException(status_code=404, detail="Transaction not found")
     if t.user_id != current_user:
         raise HTTPException(status_code=403, detail="Not authorized")
+    if data.project_id is not None:
+        p = db.query(Project).filter(Project.id == data.project_id, Project.user_id == current_user).first()
+        if not p:
+            raise HTTPException(status_code=404, detail="Project not found")
     t.project_id = data.project_id
     db.commit()
     return {"success": True}
