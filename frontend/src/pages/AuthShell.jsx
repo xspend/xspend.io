@@ -283,3 +283,119 @@ export function SuccessDialog({ open, title, children, primaryLabel, onPrimary }
     </div>
   )
 }
+
+/** Confirmation dialog with Cancel + primary (optionally danger) actions. */
+export function ConfirmDialog({
+  open,
+  title,
+  children,
+  cancelLabel = 'Cancel',
+  confirmLabel = 'Confirm',
+  onCancel,
+  onConfirm,
+  loading = false,
+  danger = false,
+}) {
+  const C = AUTH_COLORS
+  if (!open) return null
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: C.overlay,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+        zIndex: 1100,
+        fontFamily: AUTH_FONT,
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading) onCancel?.()
+      }}
+    >
+      <div style={{
+        width: '100%',
+        maxWidth: 420,
+        background: '#fff',
+        border: `0.5px solid ${C.border}`,
+        borderRadius: 16,
+        padding: '28px 28px 24px',
+        boxShadow: '0 16px 40px rgba(0,0,0,0.12)',
+      }}>
+        <h2
+          id="confirm-dialog-title"
+          style={{
+            fontSize: 22,
+            fontWeight: 500,
+            color: C.text,
+            margin: '0 0 10px',
+            textAlign: 'center',
+          }}
+        >
+          {title}
+        </h2>
+        <div style={{
+          fontSize: 15,
+          color: C.textMuted,
+          lineHeight: 1.55,
+          textAlign: 'center',
+          marginBottom: 24,
+        }}>
+          {children}
+        </div>
+        <div style={{
+          display: 'flex',
+          gap: 10,
+          flexDirection: 'row',
+        }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              color: C.text,
+              border: `0.5px solid ${C.border}`,
+              borderRadius: 10,
+              padding: '12px 16px',
+              fontSize: 16,
+              fontWeight: 500,
+              cursor: loading ? 'default' : 'pointer',
+              opacity: loading ? 0.6 : 1,
+              fontFamily: 'inherit',
+            }}
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            style={{
+              flex: 1,
+              background: danger ? C.accent : C.ctaBg,
+              color: '#fff',
+              border: 'none',
+              borderRadius: 10,
+              padding: '12px 16px',
+              fontSize: 16,
+              fontWeight: 500,
+              cursor: loading ? 'default' : 'pointer',
+              opacity: loading ? 0.7 : 1,
+              fontFamily: 'inherit',
+            }}
+          >
+            {loading ? 'Logging out…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

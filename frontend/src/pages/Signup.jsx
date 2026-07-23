@@ -18,8 +18,7 @@ import {
 } from './AuthShell'
 
 const emptyErrors = {
-  firstName: '',
-  lastName: '',
+  fullName: '',
   email: '',
   password: '',
   confirmPassword: '',
@@ -29,8 +28,7 @@ export default function Signup() {
   const navigate = useNavigate()
   const C = AUTH_COLORS
   const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
+    fullName: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -49,8 +47,7 @@ export default function Signup() {
 
   const validate = () => {
     const next = { ...emptyErrors }
-    if (!form.firstName.trim()) next.firstName = 'First name is required'
-    if (!form.lastName.trim()) next.lastName = 'Last name is required'
+    if (!form.fullName.trim()) next.fullName = 'Full Name is required.'
     if (!form.email.trim()) next.email = 'Email is required'
     else if (!isValidEmail(form.email)) next.email = 'Enter a valid email address'
     next.password = validatePassword(form.password)
@@ -68,9 +65,9 @@ export default function Signup() {
     setLoading(true)
     setError('')
     try {
-      const name = `${form.firstName.trim()} ${form.lastName.trim()}`.trim()
+      // Keep existing API payload key `name` — now holds the full name.
       const { res, data } = await signup({
-        name,
+        name: form.fullName.trim(),
         email: form.email.trim(),
         password: form.password,
       })
@@ -99,34 +96,19 @@ export default function Signup() {
         <ErrorBanner message={error} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>First name</label>
-              <input
-                type="text"
-                value={form.firstName}
-                onChange={setField('firstName')}
-                onKeyDown={handleKeyDown}
-                placeholder="First"
-                style={inputStyle}
-                autoFocus
-                autoComplete="given-name"
-              />
-              <FieldError message={errors.firstName} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Last name</label>
-              <input
-                type="text"
-                value={form.lastName}
-                onChange={setField('lastName')}
-                onKeyDown={handleKeyDown}
-                placeholder="Last"
-                style={inputStyle}
-                autoComplete="family-name"
-              />
-              <FieldError message={errors.lastName} />
-            </div>
+          <div>
+            <label style={labelStyle}>Full Name</label>
+            <input
+              type="text"
+              value={form.fullName}
+              onChange={setField('fullName')}
+              onKeyDown={handleKeyDown}
+              placeholder="Enter your full name"
+              style={inputStyle}
+              autoFocus
+              autoComplete="name"
+            />
+            <FieldError message={errors.fullName} />
           </div>
 
           <div>

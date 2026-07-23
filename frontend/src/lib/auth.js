@@ -15,6 +15,21 @@ export function validatePassword(password) {
   return ''
 }
 
+/** Stricter rules for logged-in change-password (Settings). */
+export function validateStrongPassword(password) {
+  if (!password) return 'Password is required'
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`
+  }
+  if (!/[A-Z]/.test(password)) return 'Password must contain an uppercase letter'
+  if (!/[a-z]/.test(password)) return 'Password must contain a lowercase letter'
+  if (!/[0-9]/.test(password)) return 'Password must contain a number'
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    return 'Password must contain a special character'
+  }
+  return ''
+}
+
 export function getErrorDetail(data, fallback = 'Something went wrong') {
   if (!data) return fallback
   const detail = data.detail
@@ -164,6 +179,37 @@ export async function resetPassword({ token, eid, new_password }) {
     eid: eid || '',
     new_password,
   })
+}
+
+export async function changePassword({ current_password, new_password }) {
+  return authFetch('/auth/change-password', {
+    current_password,
+    new_password,
+  })
+}
+
+/**
+ * POST /auth/logout — blacklists access token and optionally revokes refresh.
+ * Passes _skipAuthRedirect so a 401 does not trigger the global session-expired
+ * hard redirect; the caller decides how to clear local state.
+ */
+export async function logout() {
+  const refresh_token = localStorage.getItem('refresh_token') || ''
+  const body = refresh_token ? { refresh_token } : {}
+  const res = await fetch(`${API_URL}/auth/logout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    _skipAuthRedirect: true,
+  })
+  const data = await parseJson(res)
+  return { res, data }
+}
+
+export function isNotAuthenticatedError(res, data) {
+  if (res?.status === 401 || res?.status === 403) return true
+  const detail = getErrorDetail(data, '')
+  return /not authenticated/i.test(detail)
 }
 
 export async function verifyOtp({ login_token, otp }) {

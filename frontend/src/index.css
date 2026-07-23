@@ -7,10 +7,10 @@
 * { font-family: 'Inter', sans-serif; }
 
 body {
-  background: #0a0a0f;
-  color: #f0f0f5;
+  background: #fafaf5;
+  color: #1a1a1a;
 }
 
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0a0a0f; }
-::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px; }
+::-webkit-scrollbar-track { background: #fafaf5; }
+::-webkit-scrollbar-thumb { background: #d4d4cc; border-radius: 3px; }

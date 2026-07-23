@@ -185,19 +185,20 @@ export function installAuthFetchInterceptor() {
 
     const refresh_token = getRefreshToken()
     if (!refresh_token) {
-      forceSessionExpiryRedirect()
+      if (!opts._skipAuthRedirect) forceSessionExpiryRedirect()
       return res
     }
 
     const newAccess = await queueRefresh(rawFetch)
     if (!newAccess) {
-      forceSessionExpiryRedirect()
+      if (!opts._skipAuthRedirect) forceSessionExpiryRedirect()
       return res
     }
 
     const retryOpts = {
       ...nextOpts,
       _authRetry: true,
+      _skipAuthRedirect: Boolean(opts._skipAuthRedirect),
       headers: mergeHeaders(nextOpts.headers, {
         Authorization: `Bearer ${newAccess}`,
       }),
