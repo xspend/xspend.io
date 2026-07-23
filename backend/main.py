@@ -5,7 +5,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from app.core.middleware import setup_cors, setup_security_headers
+from app.core.middleware import setup_cors, setup_security_headers, setup_trusted_hosts
 from app.core.rate_limit import limiter
 from app.db import SessionLocal
 from app.models import seed_default_categories
@@ -44,12 +44,15 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Middleware order matters: Starlette runs the LAST-added middleware
-# outermost, so CORS goes last — that way even a 429 (rate limit) or 5xx
-# still carries CORS headers, instead of the browser treating it as an
-# opaque network error the frontend JS can't read.
+# outermost, so CORS goes after security headers/rate limiting — that way
+# even a 429 (rate limit) or 5xx still carries CORS headers, instead of the
+# browser treating it as an opaque network error the frontend JS can't read.
+# Trusted-host checking goes last of all (outermost/first-checked): a request
+# with a forged Host header shouldn't get as far as CORS/rate-limit handling.
 setup_security_headers(app)
 app.add_middleware(SlowAPIMiddleware)
 setup_cors(app)
+setup_trusted_hosts(app)
 
 app.include_router(profile.router)
 app.include_router(accounts.router)

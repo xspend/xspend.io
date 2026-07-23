@@ -24,6 +24,12 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret")
 for _var in ("SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM"):
     os.environ[_var] = ""
 
+# Same reasoning as above, for ALLOWED_HOSTS: TestClient's requests carry
+# Host: testserver, which won't match whatever real hostnames the
+# developer's .env lists for TrustedHostMiddleware. Blank it so the
+# middleware is skipped in tests regardless of local .env contents.
+os.environ["ALLOWED_HOSTS"] = ""
+
 # Rate limiting is a process-wide in-memory counter (not reset per-test), so
 # without this, tests hammering the same endpoint (e.g. 5+ signup/login calls
 # across different test functions) would eventually trip real limits and

@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     XSPEND_CHAT_MODEL: str = "claude-3-5-sonnet-20241022"
     XSPEND_CHAT_PROMPT_LIMIT: int = 10
 
-    ALLOWED_ORIGINS: str = ""
+    CORS_ORIGINS: str = ""
+    ALLOWED_HOSTS: str = ""
     APP_BASE_URL: Optional[str] = None
 
     EMAIL_VERIFICATION_EXPIRE_HOURS: int = 24
@@ -66,17 +67,52 @@ class Settings(BaseSettings):
 
     @property
     def jwt_secret_key(self) -> str:
-        """In production this MUST be set — fail loud so we never silently
-        fall back to a public default. Local dev keeps a fallback."""
+        """The dev fallback is an allow-list on ENVIRONMENT=="development",
+        not a block-list on =="production" — anything unset, mistyped, or
+        unrecognized (e.g. "prod", "staging") fails loud instead of quietly
+        signing tokens with a secret that's public in this repo."""
         if self.JWT_SECRET_KEY:
             return self.JWT_SECRET_KEY
-        if self.ENVIRONMENT.lower() == "production":
-            raise RuntimeError("JWT_SECRET_KEY must be set in production")
-        return "financeai-dev-only-secret-change-me"
+        if self.ENVIRONMENT.lower() == "development":
+            return "financeai-dev-only-secret-change-me"
+        raise RuntimeError(
+            f'JWT_SECRET_KEY must be set when ENVIRONMENT="{self.ENVIRONMENT}" '
+            '(the dev fallback only applies when ENVIRONMENT="development")'
+        )
 
     @property
     def allowed_origins(self) -> List[str]:
-        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+        """Fails loud on a wildcard rather than silently allow-listing every
+        origin — the app doesn't use cookies (see setup_cors: allow_credentials
+        is off), so a wildcard isn't the classic credentials+"*" CORS hole
+        today, but it defeats the point of having an allow-list at all, and
+        would become a real hole the moment anyone re-enables credentials
+        without remembering this. An empty/unset value is fine — that just
+        means no cross-origin browser requests are allowed, the safe default."""
+        origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        if "*" in origins:
+            raise RuntimeError(
+                'CORS_ORIGINS must not contain "*" — list explicit origins instead, '
+                "e.g. https://app.example.com. A wildcard defeats the allow-list."
+            )
+        return origins
+
+    @property
+    def allowed_hosts(self) -> List[str]:
+        """Starlette's TrustedHostMiddleware equivalent of Django's
+        ALLOWED_HOSTS — validates the incoming `Host` header, not the
+        `Origin` header (that's allowed_origins/CORS_ORIGINS above; a different
+        concern). Required in production, same fail-loud rule as
+        jwt_secret_key. Left unset in dev just means the middleware is
+        skipped entirely (see setup_trusted_hosts) — there's no real domain
+        to check the Host header against locally, so there's nothing a
+        wildcard-style fallback would actually protect."""
+        hosts = [h.strip() for h in self.ALLOWED_HOSTS.split(",") if h.strip()]
+        if not hosts and self.ENVIRONMENT.lower() == "production":
+            raise RuntimeError(
+                "ALLOWED_HOSTS must be set in production, e.g. ALLOWED_HOSTS=api.yourapp.com"
+            )
+        return hosts
 
     @property
     def smtp_configured(self) -> bool:
