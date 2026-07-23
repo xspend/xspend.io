@@ -4,6 +4,7 @@ import {
   verifyOtp,
   resendOtp,
   getPending2FA,
+  savePending2FA,
   clearPending2FA,
   saveSession,
   getErrorDetail,
@@ -33,7 +34,7 @@ export default function TwoFactor() {
   const C = AUTH_COLORS
   const inputsRef = useRef([])
   const timerRef = useRef(null)
-  const [pending] = useState(() => getPending2FA())
+  const [pending, setPending] = useState(() => getPending2FA())
   const [digits, setDigits] = useState(Array(OTP_LENGTH).fill(''))
   const [error, setError] = useState('')
   const [fieldError, setFieldError] = useState('')
@@ -209,6 +210,15 @@ export default function TwoFactor() {
         showToast(message, 'error')
         // Do not restart timer on failure.
       } else {
+        // The backend issues a brand-new login_token on every resend and
+        // invalidates the old one immediately — without updating it here,
+        // the next verify-otp call would still send the stale token and
+        // fail with "Invalid or expired login attempt".
+        const nextLoginToken = data?.login_token || pending.login_token
+        const updatedPending = { ...pending, login_token: nextLoginToken }
+        savePending2FA(updatedPending)
+        setPending(updatedPending)
+
         setDigits(Array(OTP_LENGTH).fill(''))
         inputsRef.current[0]?.focus()
         startTimer(RESEND_COOLDOWN_SEC)

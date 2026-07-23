@@ -122,12 +122,15 @@ export default function Settings() {
 
   const handleDelete = async () => {
     const ok = window.confirm(
-      'Delete your account? This permanently removes your account and all your data. This cannot be undone.'
+      'Delete your account? You will be logged out and your email address will be freed up. This cannot be undone.'
     )
     if (!ok) return
     setDeleting(true)
     try {
-      await fetch(`${API_URL}/auth/account`, { method: 'DELETE' })
+      const res = await fetch(`${API_URL}/auth/user`, { method: 'DELETE' })
+      if (!res.ok) {
+        throw new Error(`Delete failed with status ${res.status}`)
+      }
       localStorage.clear()
       navigate('/')
     } catch (e) {
