@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     JWT_SECRET_KEY: Optional[str] = None
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     ANTHROPIC_API_KEY: Optional[str] = None
     XSPEND_CHAT_MODEL: str = "claude-3-5-sonnet-20241022"
@@ -23,6 +25,12 @@ class Settings(BaseSettings):
 
     FRONTEND_ORIGINS: str = ""
     APP_BASE_URL: Optional[str] = None
+
+    EMAIL_VERIFICATION_EXPIRE_HOURS: int = 24
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 60
+    OTP_EXPIRE_MINUTES: int = 2
+    MAX_OTP_ATTEMPTS: int = 5
+    OTP_LOCKOUT_MINUTES: int = 10
 
     # Left as raw strings (not int/bool) so a test blanking them to "" via
     # os.environ never hits a type-coercion error — cast where actually used.

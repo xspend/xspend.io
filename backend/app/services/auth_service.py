@@ -12,15 +12,10 @@ from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.core import security
+from app.core.config import settings
 from app.models import User
 from app.repositories import auth_repository
 from . import email_service
-
-EMAIL_VERIFICATION_EXPIRE_HOURS = 24
-PASSWORD_RESET_EXPIRE_MINUTES = 60
-OTP_EXPIRE_MINUTES = 2
-MAX_OTP_ATTEMPTS = 5
-OTP_LOCKOUT_MINUTES = 10
 
 
 class AuthError(Exception):
@@ -75,7 +70,7 @@ class TooManyOtpAttempts(AuthError):
 
 def _create_verification_token(db: Session, user: User) -> str:
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(hours=EMAIL_VERIFICATION_EXPIRE_HOURS)
+    expires_at = datetime.utcnow() + timedelta(hours=settings.EMAIL_VERIFICATION_EXPIRE_HOURS)
     auth_repository.create_verification_token(db, user.id, token, expires_at)
     return token
 
@@ -147,7 +142,7 @@ async def forgot_password(db: Session, email: str) -> None:
     if not user:
         return
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES)
+    expires_at = datetime.utcnow() + timedelta(minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES)
     auth_repository.create_password_reset_token(db, user.id, token, expires_at)
     await email_service.send_password_reset_email(user.email, token, user.id)
 
@@ -213,7 +208,7 @@ async def login(db: Session, email: str, password: str) -> str:
 
     login_token = secrets.token_urlsafe(32)
     otp = security.generate_otp()
-    expires_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRE_MINUTES)
+    expires_at = datetime.utcnow() + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
     auth_repository.upsert_login_otp(db, user.id, login_token, security.hash_password(otp), expires_at)
     await email_service.send_login_otp_email(user.email, otp)
     return login_token
@@ -229,8 +224,8 @@ def verify_login_otp(db: Session, login_token: str, otp: str) -> Tuple[str, str,
         raise InvalidOtp("This code has expired — please log in again")
     if not security.verify_password(otp, row.otp_hash):
         auth_repository.increment_login_otp_attempts(db, row)
-        if row.attempts >= MAX_OTP_ATTEMPTS:
-            locked_until = datetime.utcnow() + timedelta(minutes=OTP_LOCKOUT_MINUTES)
+        if row.attempts >= settings.MAX_OTP_ATTEMPTS:
+            locked_until = datetime.utcnow() + timedelta(minutes=settings.OTP_LOCKOUT_MINUTES)
             auth_repository.lock_login_otp(db, row, locked_until)
             raise TooManyOtpAttempts(_lockout_message(locked_until))
         raise InvalidOtp("Incorrect code")
@@ -260,7 +255,7 @@ async def resend_otp(db: Session, login_token: str) -> str:
 
     new_login_token = secrets.token_urlsafe(32)
     otp = security.generate_otp()
-    expires_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRE_MINUTES)
+    expires_at = datetime.utcnow() + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
     auth_repository.upsert_login_otp(db, user.id, new_login_token, security.hash_password(otp), expires_at)
     await email_service.send_login_otp_email(user.email, otp)
     return new_login_token

@@ -12,13 +12,6 @@ from .config import settings
 SECRET_KEY = settings.jwt_secret_key
 ALGORITHM = "HS256"
 
-# Access tokens are short-lived (checked on every request); refresh tokens are
-# long-lived and only used to mint a new access token. Each carries its own
-# `jti` so the DB-backed refresh/blacklist tables can reference a specific
-# token without ever storing the JWT itself.
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-REFRESH_TOKEN_EXPIRE_DAYS = 30
-
 security = HTTPBearer(auto_error=False)
 
 def hash_password(password: str) -> str:
@@ -32,9 +25,11 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def create_access_token(user_id, email: str) -> Tuple[str, str, datetime]:
     """Returns (token, jti, expires_at). Callers don't need to persist access
-    tokens anywhere — they're validated by signature + type + blacklist lookup."""
+    tokens anywhere — they're validated by signature + type + blacklist lookup.
+    Short-lived (settings.ACCESS_TOKEN_EXPIRE_MINUTES) since it's checked on
+    every request; refresh_token below is the long-lived one."""
     jti = str(uuid.uuid4())
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token = jwt.encode(
         {"sub": str(user_id), "email": email, "type": "access", "jti": jti, "exp": expire},
         SECRET_KEY, algorithm=ALGORITHM
@@ -45,7 +40,7 @@ def create_refresh_token(user_id) -> Tuple[str, str, datetime]:
     """Returns (token, jti, expires_at). The jti is what gets stored in the
     refresh_tokens table — the token itself is never persisted."""
     jti = str(uuid.uuid4())
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     token = jwt.encode(
         {"sub": str(user_id), "type": "refresh", "jti": jti, "exp": expire},
         SECRET_KEY, algorithm=ALGORITHM

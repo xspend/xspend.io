@@ -37,9 +37,9 @@ class LoginOtp(Base):
     already passed the password check for that specific login attempt.
     `otp_hash` is bcrypt via the same hash_password/verify_password used for
     real passwords — never store the OTP itself. `attempts` caps brute-force
-    guesses at a fixed limit (see auth_service.MAX_OTP_ATTEMPTS); once hit,
+    guesses at a fixed limit (see settings.MAX_OTP_ATTEMPTS); once hit,
     `locked_until` blocks both retrying this OTP and starting a fresh login
-    for OTP_LOCKOUT_MINUTES. `user_id` is unique — one pending/most-recent
+    for settings.OTP_LOCKOUT_MINUTES. `user_id` is unique — one pending/most-recent
     challenge per user, not one row per login attempt; a new login()
     overwrites the existing row instead of piling up old ones."""
     __tablename__ = "login_otps"
@@ -58,7 +58,7 @@ class PasswordResetToken(Base):
     token proving ownership of the account's email — but for the forgot-
     password flow instead of signup verification. Kept as its own table
     rather than reused so the two flows can have different expiries/behavior
-    (see auth_service.PASSWORD_RESET_EXPIRE_MINUTES) without cross-affecting
+    (see settings.PASSWORD_RESET_EXPIRE_MINUTES) without cross-affecting
     each other."""
     __tablename__ = "password_reset_tokens"
     id = Column(Integer, primary_key=True, autoincrement=True)
