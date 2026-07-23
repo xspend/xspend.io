@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { API_URL } from '../lib/config'
@@ -8,6 +9,7 @@ import {
   validateStrongPassword,
 } from '../lib/auth'
 import { showToast } from '../lib/toast'
+import { ConfirmDialog } from './AuthShell'
 
 const COLORS = {
   bg: '#fafaf5',
@@ -81,6 +83,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
   const [pwForm, setPwForm] = useState({
     currentPassword: '',
@@ -121,21 +124,22 @@ export default function Settings() {
   }
 
   const handleDelete = async () => {
-    const ok = window.confirm(
-      'Delete your account? You will be logged out and your email address will be freed up. This cannot be undone.'
-    )
-    if (!ok) return
-    setDeleting(true)
+    if (deleting) return
+    // Force paint of loading UI before the network request starts.
+    flushSync(() => {
+      setDeleting(true)
+    })
     try {
       const res = await fetch(`${API_URL}/auth/user`, { method: 'DELETE' })
       if (!res.ok) {
         throw new Error(`Delete failed with status ${res.status}`)
       }
       localStorage.clear()
+      setDeleteConfirmOpen(false)
       navigate('/')
     } catch (e) {
       setDeleting(false)
-      window.alert('Something went wrong deleting your account. Please try again.')
+      showToast('Something went wrong deleting your account. Please try again.', 'error')
     }
   }
 
@@ -463,13 +467,30 @@ export default function Settings() {
           <button
             type="button"
             className="settings-btn settings-btn-danger"
-            onClick={handleDelete}
+            onClick={() => setDeleteConfirmOpen(true)}
             disabled={deleting}
           >
-            {deleting ? 'Deleting…' : 'Delete my account'}
+            Delete my account
           </button>
         </section>
       </div>
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        title="Delete Account"
+        cancelLabel="Cancel"
+        confirmLabel="Delete Account"
+        loadingLabel="Deleting…"
+        danger
+        loading={deleting}
+        onCancel={() => {
+          if (!deleting) setDeleteConfirmOpen(false)
+        }}
+        onConfirm={handleDelete}
+      >
+        This permanently deletes your account and all your data — transactions,
+        uploads, and goals. This action cannot be undone.
+      </ConfirmDialog>
     </div>
   )
 }

@@ -256,6 +256,7 @@ export default function AppHeader() {
         title="Log Out"
         cancelLabel="Cancel"
         confirmLabel="Log Out"
+        loadingLabel="Logging out…"
         danger
         loading={loggingOut}
         onCancel={() => {

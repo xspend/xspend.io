@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import {
   AUTH_FONT,
@@ -291,6 +291,7 @@ export function ConfirmDialog({
   children,
   cancelLabel = 'Cancel',
   confirmLabel = 'Confirm',
+  loadingLabel = 'Please wait…',
   onCancel,
   onConfirm,
   loading = false,
@@ -358,6 +359,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={loading}
+            aria-disabled={loading}
             style={{
               flex: 1,
               background: 'transparent',
@@ -367,9 +369,10 @@ export function ConfirmDialog({
               padding: '12px 16px',
               fontSize: 16,
               fontWeight: 500,
-              cursor: loading ? 'default' : 'pointer',
-              opacity: loading ? 0.6 : 1,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.5 : 1,
               fontFamily: 'inherit',
+              pointerEvents: loading ? 'none' : 'auto',
             }}
           >
             {cancelLabel}
@@ -378,6 +381,8 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={loading}
+            aria-busy={loading}
+            aria-disabled={loading}
             style={{
               flex: 1,
               background: danger ? C.accent : C.ctaBg,
@@ -387,14 +392,36 @@ export function ConfirmDialog({
               padding: '12px 16px',
               fontSize: 16,
               fontWeight: 500,
-              cursor: loading ? 'default' : 'pointer',
-              opacity: loading ? 0.7 : 1,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.85 : 1,
               fontFamily: 'inherit',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              pointerEvents: loading ? 'none' : 'auto',
             }}
           >
-            {loading ? 'Logging out…' : confirmLabel}
+            {loading && (
+              <Loader2
+                size={18}
+                strokeWidth={2.25}
+                aria-hidden="true"
+                style={{
+                  animation: 'confirm-dialog-spin 0.7s linear infinite',
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            {loading ? loadingLabel : confirmLabel}
           </button>
         </div>
+        <style>{`
+          @keyframes confirm-dialog-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     </div>
   )
