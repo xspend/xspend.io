@@ -74,10 +74,11 @@ async def resend_verification(request: Request, data: ResendVerificationRequest,
              summary="Request a password reset email")
 @limiter.limit(settings.RATE_LIMIT_SENSITIVE)
 async def forgot_password(request: Request, data: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    await auth_service.forgot_password(db, data.email)
-    # Always the same response, whether or not the email is registered —
-    # anything else would let an attacker enumerate accounts by email.
-    return ok("If that email is registered, we've sent a password reset link.")
+    try:
+        await auth_service.forgot_password(db, data.email)
+    except auth_service.AuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return ok("Password reset link sent to your email.")
 
 
 @router.post("/reset-password", response_model=ApiResponse,

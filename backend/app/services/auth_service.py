@@ -133,14 +133,10 @@ async def resend_verification(db: Session, email: str) -> None:
 
 
 async def forgot_password(db: Session, email: str) -> None:
-    """Deliberately silent on an unknown email — unlike resend_verification,
-    this endpoint must not reveal whether an address is registered. The
-    router always returns the same generic message regardless of what
-    happens here."""
     email = email.lower().strip()
     user = auth_repository.get_user_by_email(db, email)
     if not user:
-        return
+        raise UserNotFound("No account found with that email")
     token = secrets.token_urlsafe(32)
     expires_at = datetime.utcnow() + timedelta(minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES)
     auth_repository.create_password_reset_token(db, user.id, token, expires_at)

@@ -340,10 +340,12 @@ def _reset_link_from_console(capsys, email):
     return match.group(1), match.group(2)
 
 
-def test_forgot_password_unknown_email_gets_the_same_generic_response(client):
+def test_forgot_password_unknown_email_is_rejected(client):
     r = client.post("/auth/forgot-password", json={"email": "nobody@test.com"})
-    assert r.status_code == 200
-    assert "If that email is registered" in r.json()["message"]
+    assert r.status_code == 404
+    body = r.json()
+    assert body["status"] == "error"
+    assert "No account found with that email" in body["message"]
 
 
 def test_forgot_password_known_email_sends_reset_link(client, db, capsys):
@@ -353,7 +355,7 @@ def test_forgot_password_known_email_sends_reset_link(client, db, capsys):
 
     r = client.post("/auth/forgot-password", json={"email": "forgot1@test.com"})
     assert r.status_code == 200
-    assert "If that email is registered" in r.json()["message"]
+    assert "Password reset link sent" in r.json()["message"]
     reset_token, _eid = _reset_link_from_console(capsys, "forgot1@test.com")
     assert reset_token
 
