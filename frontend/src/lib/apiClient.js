@@ -1,5 +1,5 @@
 import { API_URL } from './config'
-import { clearSession, getErrorDetail } from './auth'
+import { clearSession, getErrorDetail, unwrapEnvelope } from './auth'
 import { showToast } from './toast'
 
 const SESSION_EXPIRED_MESSAGE = 'Your session has expired. Please log in again.'
@@ -78,7 +78,7 @@ async function refreshAccessToken(rawFetch) {
 
   let data = null
   try {
-    data = await res.json()
+    data = unwrapEnvelope(await res.json())
   } catch {
     data = null
   }

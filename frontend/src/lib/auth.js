@@ -51,13 +51,23 @@ async function parseJson(res) {
   }
 }
 
+// Auth endpoints wrap their body in {status, message, data}. Flatten that
+// back to the old top-level shape so every existing caller (data.access_token,
+// data.login_token, data.user, ...) keeps working unchanged.
+export function unwrapEnvelope(body) {
+  if (body && typeof body === 'object' && 'status' in body && 'data' in body) {
+    return { ...(body.data || {}), message: body.message }
+  }
+  return body
+}
+
 async function authFetch(path, body) {
   const res = await fetch(`${API_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  const data = await parseJson(res)
+  const data = unwrapEnvelope(await parseJson(res))
   return { res, data }
 }
 
