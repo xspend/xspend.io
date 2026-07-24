@@ -94,7 +94,7 @@ def make_user(client, capsys):
     def _make(email="a@test.com", password="password123", name="A"):
         r = client.post("/auth/signup", json={"email": email, "password": password, "name": name})
         assert r.status_code == 201, r.text
-        user_id = r.json()["user"]["id"]
+        user_id = r.json()["data"]["id"]
 
         db = SessionLocal()
         try:
@@ -113,7 +113,7 @@ def make_user(client, capsys):
 
         r = client.post("/auth/login", json={"email": email, "password": password})
         assert r.status_code == 200, r.text
-        login_token = r.json()["login_token"]
+        login_token = r.json()["data"]["login_token"]
 
         printed = capsys.readouterr().out
         match = re.search(rf"login OTP for {re.escape(email)}: (\d{{6}})", printed)
@@ -122,6 +122,6 @@ def make_user(client, capsys):
 
         r = client.post("/auth/verify-otp", json={"login_token": login_token, "otp": otp})
         assert r.status_code == 200, r.text
-        access_token = r.json()["access_token"]
+        access_token = r.json()["data"]["access_token"]
         return user_id, {"Authorization": f"Bearer {access_token}"}
     return _make

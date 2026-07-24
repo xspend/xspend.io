@@ -2,9 +2,11 @@
 router so the shapes are easy to find and reuse, and so FastAPI can build
 proper Swagger schemas for every auth endpoint instead of the old `data: dict`.
 """
-from typing import Optional
+from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
+
+T = TypeVar("T")
 
 # Common domain-typo guard (gmai.com, yaho.com, etc.) — carried over from the
 # original hand-rolled check in main.py, just relocated into the schema.
@@ -55,8 +57,7 @@ class ResetPasswordRequest(BaseModel):
     eid: Optional[str] = None
     new_password: str = Field(min_length=8)
 
-class LoginOtpRequiredResponse(BaseModel):
-    message: str
+class LoginPendingData(BaseModel):
     login_token: str
 
 class VerifyOtpRequest(BaseModel):
@@ -83,13 +84,6 @@ class UserResponse(BaseModel):
     monthly_budget: float
     email_verified: bool
 
-class SignupResponse(BaseModel):
-    message: str
-    user: UserResponse
-
-class MessageResponse(BaseModel):
-    message: str
-
 class TokenPairResponse(BaseModel):
     access_token: str
     refresh_token: str
@@ -97,3 +91,8 @@ class TokenPairResponse(BaseModel):
 
 class LoginResponse(TokenPairResponse):
     user: UserResponse
+
+class ApiResponse(BaseModel, Generic[T]):
+    status: str = "success"
+    message: str
+    data: Optional[T] = None

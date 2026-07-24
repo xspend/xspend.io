@@ -27,37 +27,57 @@ def _login_with_otp(client, capsys, email, password):
     """Drives both steps of login and returns the final LoginResponse body."""
     step1 = client.post("/auth/login", json={"email": email, "password": password})
     assert step1.status_code == 200, step1.text
-    login_token = step1.json()["login_token"]
+    login_token = step1.json()["data"]["login_token"]
     otp = _otp_from_console(capsys, email)
     step2 = client.post("/auth/verify-otp", json={"login_token": login_token, "otp": otp})
     assert step2.status_code == 200, step2.text
-    return step2.json()
+    return step2.json()["data"]
 
 
 def test_signup_creates_unverified_user_with_no_token(client):
     r = client.post("/auth/signup", json={"email": "new@test.com", "password": "password123", "name": "New"})
     assert r.status_code == 201, r.text
     body = r.json()
-    assert "token" not in body
-    assert "access_token" not in body
-    assert body["user"]["email"] == "new@test.com"
-    assert body["user"]["email_verified"] is False
+    assert body["status"] == "success"
+    data = body["data"]
+    assert "token" not in data
+    assert "access_token" not in data
+    assert data["email"] == "new@test.com"
+    assert data["email_verified"] is False
 
 
 def test_signup_rejects_short_password(client):
     r = client.post("/auth/signup", json={"email": "x@test.com", "password": "short"})
     assert r.status_code == 422
+    body = r.json()
+    assert body["status"] == "error"
+    assert body["data"] is None
+    assert isinstance(body["message"], str) and body["message"]
 
 
 def test_signup_rejects_duplicate_email(client):
     client.post("/auth/signup", json={"email": "dup@test.com", "password": "password123"})
     r = client.post("/auth/signup", json={"email": "dup@test.com", "password": "password123"})
     assert r.status_code == 400
+    body = r.json()
+    assert body["status"] == "error"
+    assert body["message"] == "Email already registered"
+    assert body["data"] is None
+
+
+def test_auth_error_envelope_does_not_leak_into_non_auth_routes(client):
+    # /transactions isn't an auth route — it must keep FastAPI's default
+    # {"detail": ...} error body, not the auth {status, message, data} envelope.
+    r = client.get("/transactions")
+    assert r.status_code == 401
+    body = r.json()
+    assert "detail" in body
+    assert "status" not in body
 
 
 def test_login_blocked_until_email_verified(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "unverified@test.com", "password": "password123"})
-    user_id = r.json()["user"]["id"]
+    user_id = r.json()["data"]["id"]
     r = client.post("/auth/login", json={"email": "unverified@test.com", "password": "password123"})
     assert r.status_code == 403
 
@@ -72,7 +92,7 @@ def test_login_blocked_until_email_verified(client, db, capsys):
 
 def test_login_wrong_password(client, db):
     r = client.post("/auth/signup", json={"email": "log@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     bad = client.post("/auth/login", json={"email": "log@test.com", "password": "nope"})
@@ -81,12 +101,12 @@ def test_login_wrong_password(client, db):
 
 def test_login_step1_returns_no_tokens(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "otp1@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     step1 = client.post("/auth/login", json={"email": "otp1@test.com", "password": "password123"})
     assert step1.status_code == 200
-    body = step1.json()
+    body = step1.json()["data"]
     assert "login_token" in body
     assert "access_token" not in body
     assert "refresh_token" not in body
@@ -96,11 +116,11 @@ def test_login_step1_returns_no_tokens(client, db, capsys):
 
 def test_verify_otp_wrong_code_rejected(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "otp2@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     step1 = client.post("/auth/login", json={"email": "otp2@test.com", "password": "password123"})
-    login_token = step1.json()["login_token"]
+    login_token = step1.json()["data"]["login_token"]
     _otp_from_console(capsys, "otp2@test.com")
 
     wrong = client.post("/auth/verify-otp", json={"login_token": login_token, "otp": "000000"})
@@ -114,11 +134,11 @@ def test_verify_otp_bogus_login_token_rejected(client):
 
 def test_verify_otp_cannot_be_reused(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "otp3@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     step1 = client.post("/auth/login", json={"email": "otp3@test.com", "password": "password123"})
-    login_token = step1.json()["login_token"]
+    login_token = step1.json()["data"]["login_token"]
     otp = _otp_from_console(capsys, "otp3@test.com")
 
     first = client.post("/auth/verify-otp", json={"login_token": login_token, "otp": otp})
@@ -131,7 +151,7 @@ def test_verify_otp_cannot_be_reused(client, db, capsys):
 
 def test_login_twice_issues_independent_otp_challenges(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "otp5@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     first = _login_with_otp(client, capsys, "otp5@test.com", "password123")
@@ -141,11 +161,11 @@ def test_login_twice_issues_independent_otp_challenges(client, db, capsys):
 
 def test_verify_otp_too_many_wrong_attempts_locks_out(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "otp4@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     step1 = client.post("/auth/login", json={"email": "otp4@test.com", "password": "password123"})
-    login_token = step1.json()["login_token"]
+    login_token = step1.json()["data"]["login_token"]
     otp = _otp_from_console(capsys, "otp4@test.com")
 
     # the first 4 wrong guesses are just "incorrect code"
@@ -164,11 +184,11 @@ def test_verify_otp_too_many_wrong_attempts_locks_out(client, db, capsys):
 
 def test_login_refused_while_otp_is_locked_out(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "otp6@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     step1 = client.post("/auth/login", json={"email": "otp6@test.com", "password": "password123"})
-    login_token = step1.json()["login_token"]
+    login_token = step1.json()["data"]["login_token"]
     _otp_from_console(capsys, "otp6@test.com")
 
     for _ in range(5):
@@ -184,11 +204,11 @@ def test_login_works_again_once_the_lockout_expires(client, db, capsys):
     from app.models import LoginOtp
 
     r = client.post("/auth/signup", json={"email": "otp7@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     step1 = client.post("/auth/login", json={"email": "otp7@test.com", "password": "password123"})
-    login_token = step1.json()["login_token"]
+    login_token = step1.json()["data"]["login_token"]
     _otp_from_console(capsys, "otp7@test.com")
     for _ in range(5):
         client.post("/auth/verify-otp", json={"login_token": login_token, "otp": "000000"})
@@ -208,7 +228,7 @@ def test_login_works_again_once_the_lockout_expires(client, db, capsys):
 
 def test_login_otps_keeps_a_single_row_per_user(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "otp8@test.com", "password": "password123"})
-    user_id = r.json()["user"]["id"]
+    user_id = r.json()["data"]["id"]
     token = _verification_token(db, user_id)
     client.post("/auth/verify-email", json={"token": token})
 
@@ -222,16 +242,16 @@ def test_login_otps_keeps_a_single_row_per_user(client, db, capsys):
 
 def test_resend_otp_issues_new_code_and_invalidates_old_login_token(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "otp9@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     step1 = client.post("/auth/login", json={"email": "otp9@test.com", "password": "password123"})
-    old_login_token = step1.json()["login_token"]
+    old_login_token = step1.json()["data"]["login_token"]
     _otp_from_console(capsys, "otp9@test.com")
 
     resend = client.post("/auth/resend-otp", json={"login_token": old_login_token})
     assert resend.status_code == 200
-    new_login_token = resend.json()["login_token"]
+    new_login_token = resend.json()["data"]["login_token"]
     assert new_login_token != old_login_token
     new_otp = _otp_from_console(capsys, "otp9@test.com")
 
@@ -251,11 +271,11 @@ def test_resend_otp_rejects_bogus_login_token(client):
 
 def test_resend_otp_rejects_while_locked_out(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "otp10@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     step1 = client.post("/auth/login", json={"email": "otp10@test.com", "password": "password123"})
-    login_token = step1.json()["login_token"]
+    login_token = step1.json()["data"]["login_token"]
     _otp_from_console(capsys, "otp10@test.com")
 
     for _ in range(5):
@@ -267,7 +287,7 @@ def test_resend_otp_rejects_while_locked_out(client, db, capsys):
 
 def test_verify_email_rejects_bad_or_reused_token(client, db):
     r = client.post("/auth/signup", json={"email": "verify@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
 
     assert client.post("/auth/verify-email", json={"token": "not-a-real-token"}).status_code == 400
     assert client.post("/auth/verify-email", json={"token": token}).status_code == 200
@@ -279,7 +299,7 @@ def test_verify_email_eid_is_optional_but_checked_if_present(client, db):
     from app.core.security import encode_id
 
     r = client.post("/auth/signup", json={"email": "verify-id@test.com", "password": "password123"})
-    user_id = r.json()["user"]["id"]
+    user_id = r.json()["data"]["id"]
     token = _verification_token(db, user_id)
 
     # a mismatched eid rejects even a real, unexpired token
@@ -293,7 +313,7 @@ def test_verify_email_eid_is_optional_but_checked_if_present(client, db):
 
 def test_resend_verification_issues_a_new_token(client, db):
     r = client.post("/auth/signup", json={"email": "resend@test.com", "password": "password123"})
-    user_id = r.json()["user"]["id"]
+    user_id = r.json()["data"]["id"]
     first_token = _verification_token(db, user_id)
 
     resend = client.post("/auth/resend-verification", json={"email": "resend@test.com"})
@@ -328,7 +348,7 @@ def test_forgot_password_unknown_email_gets_the_same_generic_response(client):
 
 def test_forgot_password_known_email_sends_reset_link(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "forgot1@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     r = client.post("/auth/forgot-password", json={"email": "forgot1@test.com"})
@@ -340,7 +360,7 @@ def test_forgot_password_known_email_sends_reset_link(client, db, capsys):
 
 def test_reset_password_with_valid_token_allows_login_with_new_password(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "forgot2@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     client.post("/auth/forgot-password", json={"email": "forgot2@test.com"})
@@ -361,7 +381,7 @@ def test_reset_password_with_valid_token_allows_login_with_new_password(client, 
 
 def test_reset_password_rejects_bad_or_reused_token(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "forgot3@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     client.post("/auth/forgot-password", json={"email": "forgot3@test.com"})
@@ -385,7 +405,7 @@ def test_reset_password_rejects_bad_or_reused_token(client, db, capsys):
 
 def test_reset_password_eid_mismatch_rejected(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "forgot4@test.com", "password": "password123"})
-    user_id = r.json()["user"]["id"]
+    user_id = r.json()["data"]["id"]
     token = _verification_token(db, user_id)
     client.post("/auth/verify-email", json={"token": token})
 
@@ -402,7 +422,7 @@ def test_reset_password_eid_mismatch_rejected(client, db, capsys):
 
 def test_reset_password_rejects_short_password(client, db, capsys):
     r = client.post("/auth/signup", json={"email": "forgot5@test.com", "password": "password123"})
-    token = _verification_token(db, r.json()["user"]["id"])
+    token = _verification_token(db, r.json()["data"]["id"])
     client.post("/auth/verify-email", json={"token": token})
 
     client.post("/auth/forgot-password", json={"email": "forgot5@test.com"})
@@ -441,7 +461,7 @@ def test_refresh_rotates_token_and_revokes_the_old_one(client, make_user, capsys
 
     refreshed = client.post("/auth/refresh", json={"refresh_token": refresh_token})
     assert refreshed.status_code == 200
-    new_pair = refreshed.json()
+    new_pair = refreshed.json()["data"]
     assert new_pair["access_token"] != access_token
     assert new_pair["refresh_token"] != refresh_token
 
@@ -485,7 +505,7 @@ def test_me_returns_current_user(client, make_user):
     _user_id, headers = make_user(email="me@test.com", name="Me")
     r = client.get("/auth/me", headers=headers)
     assert r.status_code == 200
-    assert r.json()["email"] == "me@test.com"
+    assert r.json()["data"]["email"] == "me@test.com"
 
 
 def test_change_password_success_and_old_password_stops_working(client, make_user):
@@ -590,7 +610,7 @@ def test_soft_delete_mangles_email_and_frees_it_for_new_signup(client, db, make_
         "/auth/signup", json={"email": "softdelete2@test.com", "password": "password123"}
     )
     assert signup.status_code == 201
-    assert signup.json()["user"]["id"] != user_id
+    assert signup.json()["data"]["id"] != user_id
 
 
 def test_soft_delete_invalidates_the_current_access_token_immediately(client, make_user):
